@@ -97,7 +97,11 @@ func (c *Ceremony) Run(ctx context.Context) error {
 		return ErrHeld
 	}
 	if c.o.NoPR {
-		return c.finish(run.Done)
+		if err := c.finish(run.Done); err != nil {
+			return err
+		}
+		c.stamp()
+		return nil
 	}
 	if err := c.openPR(ctx); err != nil {
 		return c.fail(err)

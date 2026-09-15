@@ -70,6 +70,19 @@ It draws inline under your prompt — no full-screen takeover, your scrollback s
 
 `--plain` gets you line prompts instead, and that's what you get automatically when stdout isn't a terminal.
 
+## From anywhere, without a terminal
+
+The status bar shows a held run in every Claude Code session, so you shouldn't need to find the right terminal to act on it.
+
+```sh
+lgtm -b my-branch                     # open the panel for that branch's run, from any directory in the repo
+lgtm decide 0fe5 accept -b my-branch  # record a decision, no terminal needed (id prefixes work)
+lgtm continue -b my-branch            # apply what's recorded, run the round, open the PR
+lgtm continue --auto -b my-branch     # …then autopilot the block findings
+```
+
+`lgtm init --skill` installs a `/lgtm` skill for Claude Code. In any chat: `/lgtm` shows what's waiting, you say "accept the first, fix the second", it records those and continues. The bar updates as it goes.
+
 ## The status bar
 
 `lgtm init --statusline` puts a live bar in Claude Code's status line (or point any status line at `lgtm statusline`). It re-renders in about 4ms and breathes with the run:
