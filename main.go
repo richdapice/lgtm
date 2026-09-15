@@ -74,6 +74,8 @@ func main() {
 		err = cmdDismiss(ctx, args)
 	case "doctor":
 		err = cmdDoctor(ctx)
+	case "demo":
+		err = tui.Demo(ctx)
 	case "init":
 		err = cmdInit(ctx, args)
 	case "decide":
@@ -108,6 +110,7 @@ func usage() {
   lgtm dismiss ID [-r REASON]                         never see this finding again (commits to .lgtm/dismissed.toml)
   lgtm init [-y] [--statusline] [--skill]             detect projects, write .lgtm.toml; wire the status bar and the /lgtm skill
   lgtm doctor                                         check each configured agent answers
+  lgtm demo                                           a scripted run in the real panel; no agent, no repo
   lgtm version
 
 Exit codes: 0 done · 1 error · 2 held (findings need you; run lgtm again)
