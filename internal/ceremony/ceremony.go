@@ -485,7 +485,18 @@ func (c *Ceremony) rounds(ctx context.Context) error {
 		// fixer touched, and a failing check reverts the round
 		c.step("check", fmt.Sprintf("%d file(s) touched", len(touched)))
 		checks := project.Run(ctx, c.root, project.Plan(c.repo, touched))
-		ok, _ := project.AllOK(checks)
+		ok, skipped := project.AllOK(checks)
+		if ok && skipped == len(checks) {
+			// every check was skipped: nothing validated the fix, so nothing
+			// ships. Not a failure of the fix, a gap in the config.
+			c.println("round %d: no checks ran (none configured for the touched files) — the fix is not committed; run `lgtm init` to add test/lint commands", round)
+			if err := revert(ctx, c.root); err != nil {
+				return err
+			}
+			c.run.Error = "no checks configured; fix reverted"
+			c.run.Rounds = append(c.run.Rounds, run.RoundSummary{Reverted: true, Open: len(c.actionable())})
+			break
+		}
 		if !ok {
 			c.run.Rounds = append(c.run.Rounds, run.RoundSummary{Reverted: true, Open: len(c.actionable())})
 			c.println("round %d: checks failed after fix; reverting", round)
