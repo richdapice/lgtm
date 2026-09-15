@@ -44,6 +44,7 @@ func Run(ctx context.Context, o ceremony.Options) (transcript string, err error)
 	m.files = c.Files()
 	m.canFix = c.CanFix()
 	m.decider.files = c.Files
+	m.run = c.Snapshot()
 
 	p := tea.NewProgram(m, tea.WithContext(ctx))
 	m.program = p

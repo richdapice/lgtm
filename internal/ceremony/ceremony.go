@@ -682,6 +682,18 @@ func (c *Ceremony) decider() Decider {
 // points at. Stable after prepare; refreshed after each fix round.
 func (c *Ceremony) Files() []diffparse.FileDiff { return c.files }
 
+// Snapshot is a copy of the run state, for a UI to seed itself from before
+// the first update arrives (a resumed run doesn't save until something
+// changes).
+func (c *Ceremony) Snapshot() run.Run {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	snap := *c.run
+	snap.Lenses = append([]run.Lens(nil), c.run.Lenses...)
+	snap.Findings.Findings = append([]finding.Finding(nil), c.run.Findings.Findings...)
+	return snap
+}
+
 // CanFix reports whether the configured agent has a fix_command.
 func (c *Ceremony) CanFix() bool { return c.fixer != nil }
 
