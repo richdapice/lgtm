@@ -117,7 +117,7 @@ The panel draws under your prompt, so there's no full-screen takeover and your s
 | `←` `→` or `f` `a` `d` `s` | pick an action: Fix, Accept, Dismiss, Skip |
 | `Enter` | apply it to that finding, then move to the next undecided one |
 | `Enter` again, once every finding has a decision | submit the round |
-| `A` | autopilot from here |
+| `A` | hand the rest to autopilot |
 | `q` | quit for now; the run waits and `lgtm` resumes it |
 
 What each action means:
@@ -131,7 +131,7 @@ What each action means:
 
 Sometimes the agent won't fix something because it needs a design decision first ("crop the video for phones, or re-render it?"). It says so, and its reason stays on the finding. You can answer with a direction: `lgtm decide 0fe5 fix -m "crop it"`.
 
-Manual mode is the default, and it asks you about each finding. Autopilot doesn't ask. Every finding goes to the agent with the judgement calls delegated, whatever comes back unfixed is noted in the PR body, and the PR opens. If a `block` shipped unfixed, the PR opens as a draft. Start in autopilot with `lgtm --auto`, or press `A` mid-review.
+Autopilot is the default. It doesn't ask: every finding goes to the agent with the judgement calls delegated, whatever comes back unfixed is noted in the PR body, and the PR opens. If a `block` shipped unfixed, the PR opens as a draft. `lgtm --manual` asks you about each finding instead, in the panel above, and `mode = "manual"` in `.lgtm.toml` makes that the default for a repo.
 
 `--plain` swaps the panel for line prompts, which is also what you get when stdout isn't a terminal.
 
@@ -184,7 +184,7 @@ While it reviews, the bright bar is whichever lens is running. After that the ga
 
 ```toml
 [lgtm]
-mode = "manual"          # manual | auto
+mode = "auto"            # auto | manual
 max_fix_rounds = 3
 fanout = "single"        # single | parallel
 # max_budget_usd = 0.75  # cap per agent call; 0 = none

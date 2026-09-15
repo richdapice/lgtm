@@ -115,7 +115,7 @@ func detectDir(dir, rel string) (config.Project, bool) {
 // it, anything else replaces it. yes skips the questions entirely.
 func Prompt(in io.Reader, out io.Writer, d Detected, yes bool) config.Repo {
 	r := config.Repo{
-		Settings: config.Settings{Mode: "manual", MaxFixRounds: 3, Fanout: "single"},
+		Settings: config.Settings{Mode: "auto", MaxFixRounds: 3, Fanout: "single"},
 		Projects: d.Projects,
 	}
 	for _, n := range d.Notes {

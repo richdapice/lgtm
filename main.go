@@ -98,7 +98,7 @@ func main() {
 func usage() {
 	fmt.Print(`lgtm — review a branch, then open the PR
 
-  lgtm [--auto] [--intent TEXT] [--draft] [--no-pr] [--plain]
+  lgtm [--manual] [--intent TEXT] [--draft] [--no-pr] [--plain]
                                                       review the current branch, then open the PR
   lgtm statusline                                     render the status bar (reads Claude Code JSON on stdin)
   lgtm decide ID fix|accept|dismiss|skip [-b BRANCH]  record a decision on a held run (no terminal needed)
@@ -117,7 +117,8 @@ Log: .git/lgtm/lgtm.log (or LGTM_DEBUG=/path)   Config: LGTM_CONFIG=/path/to/con
 
 func cmdRun(ctx context.Context, args []string, logger *log.Logger) error {
 	fs := flag.NewFlagSet("lgtm", flag.ExitOnError)
-	auto := fs.Bool("auto", false, "fix every finding without asking, up to max_fix_rounds")
+	auto := fs.Bool("auto", false, "autopilot (the default); --manual to be asked about each finding")
+	manual := fs.Bool("manual", false, "ask about each finding instead of autopilot")
 	branch := fs.String("b", "", "branch (any worktree of this repo)")
 	intent := fs.String("intent", "", "what the change is for (default: the branch's commit messages)")
 	draft := fs.Bool("draft", false, "open the PR as a draft")
@@ -128,7 +129,7 @@ func cmdRun(ctx context.Context, args []string, logger *log.Logger) error {
 	if err != nil {
 		return err
 	}
-	opts := ceremony.Options{Dir: cwd, Auto: *auto, Intent: *intent, Draft: *draft, NoPR: *noPR, Log: logger}
+	opts := ceremony.Options{Dir: cwd, Auto: *auto, Manual: *manual, Intent: *intent, Draft: *draft, NoPR: *noPR, Log: logger}
 	if *plain || !term.IsTerminal(int(os.Stdout.Fd())) || !term.IsTerminal(int(os.Stdin.Fd())) {
 		return ceremony.Run(ctx, opts)
 	}

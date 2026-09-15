@@ -58,7 +58,7 @@ func TestPromptAndWriteRoundTrip(t *testing.T) {
 
 func TestPromptYesSkipsQuestions(t *testing.T) {
 	r := Prompt(strings.NewReader(""), &strings.Builder{}, Detected{Projects: []config.Project{{Path: "."}}}, true)
-	if r.Settings.Mode != "manual" || r.Settings.MaxFixRounds != 3 {
+	if r.Settings.Mode != "auto" || r.Settings.MaxFixRounds != 3 {
 		t.Fatalf("defaults = %+v", r.Settings)
 	}
 }

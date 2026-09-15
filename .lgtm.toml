@@ -8,7 +8,7 @@
 # [lens.<name>] model = "haiku" | "sonnet" | "opus" overrides the agent default.
 
 [lgtm]
-  mode = "manual"
+  mode = "auto"
   max_fix_rounds = 3
   fanout = "single"
   max_budget_usd = 0.0

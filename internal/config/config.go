@@ -140,7 +140,7 @@ func (g *Global) Agent(name string) (Agent, bool) {
 }
 
 // LoadRepo reads .lgtm.toml from the repo root. Missing is fine: the defaults
-// are manual mode, three rounds, single-call fanout, all four lenses, and one
+// are autopilot, three rounds, single-call fanout, all four lenses, and one
 // project at "." with no commands (so the fix loop will apply edits but not
 // re-run checks until you tell it how).
 func LoadRepo(root string) (*Repo, error) {
@@ -151,7 +151,7 @@ func LoadRepo(root string) (*Repo, error) {
 		}
 	}
 	if r.Settings.Mode == "" {
-		r.Settings.Mode = "manual"
+		r.Settings.Mode = "auto"
 	}
 	if r.Settings.MaxFixRounds == 0 {
 		r.Settings.MaxFixRounds = 3

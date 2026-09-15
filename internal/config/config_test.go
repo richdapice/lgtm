@@ -66,7 +66,7 @@ test = "npx vitest related {files} --run"
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.Settings.Mode != "manual" || r.Settings.MaxFixRounds != 2 || r.Settings.Fanout != "single" {
+	if r.Settings.Mode != "auto" || r.Settings.MaxFixRounds != 2 || r.Settings.Fanout != "single" {
 		t.Fatalf("settings = %+v", r.Settings)
 	}
 	got := r.EnabledLenses()

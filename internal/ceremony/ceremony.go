@@ -36,7 +36,8 @@ var ErrHeld = errors.New("held: findings need you")
 
 type Options struct {
 	Dir    string
-	Auto   bool
+	Auto   bool // force autopilot
+	Manual bool // force manual: ask about each finding
 	Intent string
 	Draft  bool
 	NoPR   bool // review only; skip push/PR/CI
@@ -228,6 +229,9 @@ func prepare(ctx context.Context, o Options) (*Ceremony, error) {
 		if o.Auto {
 			c.run.Mode = "auto"
 		}
+		if o.Manual {
+			c.run.Mode = "manual"
+		}
 		// Held is where the run *was*; rounds decide where it goes next
 		c.run.Phase = run.Fix
 		c.log("resuming held run (%d open)", c.run.Findings.Counts().Open)
@@ -237,6 +241,9 @@ func prepare(ctx context.Context, o Options) (*Ceremony, error) {
 	mode := c.repo.Settings.Mode
 	if o.Auto {
 		mode = "auto"
+	}
+	if o.Manual {
+		mode = "manual"
 	}
 	lenses := c.repo.EnabledLenses()
 	models := map[string]string{}
