@@ -155,12 +155,6 @@ func cmdStatusline(args []string) error {
 	if c, err := strconv.Atoi(os.Getenv("COLUMNS")); err == nil && c > 20 {
 		cols = c
 	}
-	common, err := gitx.FindCommonDir(dir)
-	if err != nil {
-		return nil // not in a repo: draw nothing
-	}
-	runs, _ := run.All(common)
-	hist, _ := run.History(common, 20)
 	var plan *render.PlanUsage
 	if rl := in.RateLimits; rl != nil && (rl.FiveHour != nil || rl.SevenDay != nil) {
 		plan = &render.PlanUsage{}
@@ -177,9 +171,22 @@ func cmdStatusline(args []string) error {
 			}
 		}
 	}
-	out := render.Render(render.Input{Runs: runs, History: hist, IdleRef: gitx.BranchFast(dir), Now: time.Now(), Plan: plan},
-		render.Style{Cols: cols, Color: os.Getenv("NO_COLOR") == ""})
-	fmt.Println(out)
+	style := render.Style{Cols: cols, Color: os.Getenv("NO_COLOR") == ""}
+	common, err := gitx.FindCommonDir(dir)
+	if err != nil {
+		// outside a repo there's no run to show, but the plan windows are
+		// worth a row anywhere
+		home, _ := os.UserHomeDir()
+		ref := dir
+		if home != "" && strings.HasPrefix(dir, home) {
+			ref = "~" + strings.TrimPrefix(dir, home)
+		}
+		fmt.Println(render.Render(render.Input{IdleRef: ref, NoRepo: true, Now: time.Now(), Plan: plan}, style))
+		return nil
+	}
+	runs, _ := run.All(common)
+	hist, _ := run.History(common, 20)
+	fmt.Println(render.Render(render.Input{Runs: runs, History: hist, IdleRef: gitx.BranchFast(dir), Now: time.Now(), Plan: plan}, style))
 	return nil
 }
 

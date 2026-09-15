@@ -54,6 +54,7 @@ type Input struct {
 	Runs    []*run.Run
 	History []run.Summary
 	IdleRef string
+	NoRepo  bool // cwd isn't a git repo: show the plan windows, nothing else
 	Now     time.Time
 	// Plan is subscription-window usage from Claude Code's statusline JSON,
 	// when the host provides it. On Pro/Max the dollar figures are estimates
@@ -132,6 +133,13 @@ func Render(in Input, st Style) string {
 }
 
 func idle(in Input, st Style) string {
+	if in.NoRepo {
+		head := st.c(bold, "lgtm") + " ▸ " + st.c(dim, in.IdleRef+"   not a repo")
+		if p := in.Plan.render(st, in.Now); p != "" {
+			head += "   " + p
+		}
+		return row(st, "", head, "", "lgtm")
+	}
 	today, held := 0, 0
 	y, m, d := in.Now.Date()
 	for _, h := range in.History {
