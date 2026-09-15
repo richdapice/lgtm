@@ -70,8 +70,8 @@ func TestHeldLayout(t *testing.T) {
 	r.Findings.Close()
 	out := Render(Input{Runs: []*run.Run{r}, Now: now}, Style{Cols: 100})
 	ls := lines(out)
-	if len(ls) != 7 {
-		t.Fatalf("want header + 4 lenses + loop + prompt, got %d:\n%s", len(ls), out)
+	if len(ls) != 3 {
+		t.Fatalf("want header + loop + prompt, got %d:\n%s", len(ls), out)
 	}
 	r.UpdatedAt = now.Add(-30 * time.Second)
 	out = Render(Input{Runs: []*run.Run{r}, Now: now.Add(10 * time.Minute)}, Style{Cols: 100})
@@ -79,11 +79,11 @@ func TestHeldLayout(t *testing.T) {
 	if !strings.Contains(ls[0], "4 need you   1m44s") {
 		t.Fatalf("held elapsed should freeze at UpdatedAt: %q", ls[0])
 	}
-	if !strings.Contains(ls[5], "● ● ●") || !strings.Contains(ls[5], "round 3/3") || !strings.Contains(ls[5], "4 open") {
-		t.Fatalf("loop row = %q", ls[5])
+	if !strings.Contains(ls[1], "● ● ●") || !strings.Contains(ls[1], "round 3/3") || !strings.Contains(ls[1], "4 open") {
+		t.Fatalf("loop row = %q", ls[1])
 	}
-	if !strings.Contains(ls[6], "lgtm -b worktree-r2-incremental-cache") {
-		t.Fatalf("prompt row = %q", ls[6])
+	if !strings.Contains(ls[2], "lgtm -b worktree-r2-incremental-cache") {
+		t.Fatalf("prompt row = %q", ls[2])
 	}
 }
 
