@@ -112,29 +112,32 @@ func Demo(ctx context.Context) error {
 				_ = f
 			}
 		}
-		r.Round = 1
-		steps := []struct {
-			step, note string
-			d          time.Duration
-		}{
-			{"fix", fmt.Sprintf("agent working on %d finding(s)", fixing), 2600 * time.Millisecond},
-			{"check", "vitest related · eslint", 1800 * time.Millisecond},
-			{"verify", fmt.Sprintf("%d to confirm", fixing), 1600 * time.Millisecond},
-		}
-		for _, s := range steps {
-			r.Step, r.StepNote = s.step, s.note
-			r.CostUSD += 0.12
-			send()
-			if !tick(s.d) {
-				return
+		// nothing to fix means straight to push, like the real thing
+		if fixing > 0 {
+			r.Round = 1
+			steps := []struct {
+				step, note string
+				d          time.Duration
+			}{
+				{"fix", fmt.Sprintf("agent working on %d finding(s)", fixing), 2600 * time.Millisecond},
+				{"check", "vitest related · eslint", 1800 * time.Millisecond},
+				{"verify", fmt.Sprintf("%d to confirm", fixing), 1600 * time.Millisecond},
 			}
+			for _, s := range steps {
+				r.Step, r.StepNote = s.step, s.note
+				r.CostUSD += 0.12
+				send()
+				if !tick(s.d) {
+					return
+				}
+			}
+			for _, f := range r.Findings.Open() {
+				r.Findings.Transition(f.ID, finding.Fixed, 1)
+			}
+			c := r.Findings.Counts()
+			r.Rounds = []run.RoundSummary{{Fixed: c.Fixed, Open: 0}}
+			p.Send(noteMsg{fmt.Sprintf("round 1/3: %d fixed · 0 filed · 0 open", c.Fixed)})
 		}
-		for _, f := range r.Findings.Open() {
-			r.Findings.Transition(f.ID, finding.Fixed, 1)
-		}
-		c := r.Findings.Counts()
-		r.Rounds = []run.RoundSummary{{Fixed: c.Fixed, Open: 0}}
-		p.Send(noteMsg{fmt.Sprintf("round 1/3: %d fixed · 0 filed · 0 open", c.Fixed)})
 		for _, s := range []struct {
 			step, note string
 			d          time.Duration
