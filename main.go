@@ -192,7 +192,8 @@ func cmdStatusline(args []string) error {
 		if home != "" && strings.HasPrefix(dir, home) {
 			ref = "~" + strings.TrimPrefix(dir, home)
 		}
-		fmt.Println(render.Render(render.Input{IdleRef: ref, NoRepo: true, Now: time.Now(), Plan: plan}, style))
+		hist, _ := run.History("", 20)
+		fmt.Println(render.Render(render.Input{IdleRef: ref, NoRepo: true, History: hist, Now: time.Now(), Plan: plan}, style))
 		return nil
 	}
 	runs, _ := run.All(common)

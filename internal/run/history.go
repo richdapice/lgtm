@@ -11,6 +11,7 @@ import (
 // Summary is one line of history.jsonl — enough for the idle sparkline and the
 // "3 held today" count, nothing that would let history grow unbounded.
 type Summary struct {
+	Repo     string        `json:"repo,omitempty"` // git common dir, so a run is traceable to its repo
 	Branch   string        `json:"branch"`
 	EndedAt  time.Time     `json:"ended_at"`
 	Duration time.Duration `json:"duration"`
@@ -20,12 +21,28 @@ type Summary struct {
 	CostUSD  float64       `json:"cost_usd"`
 }
 
-func historyPath(gitCommonDir string) string {
-	return filepath.Join(Dir(gitCommonDir), "history.jsonl")
+// HistoryPath is user-level, not per-repo: "12 runs today" and your streak
+// are about you, and should read the same from every session and every repo.
+// $LGTM_STATE overrides; else $XDG_STATE_HOME/lgtm; else ~/.local/state/lgtm.
+func HistoryPath() string {
+	if p := os.Getenv("LGTM_STATE"); p != "" {
+		return filepath.Join(p, "history.jsonl")
+	}
+	if x := os.Getenv("XDG_STATE_HOME"); x != "" {
+		return filepath.Join(x, "lgtm", "history.jsonl")
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "history.jsonl"
+	}
+	return filepath.Join(home, ".local", "state", "lgtm", "history.jsonl")
 }
 
 func AppendHistory(gitCommonDir string, s Summary) error {
-	p := historyPath(gitCommonDir)
+	if s.Repo == "" {
+		s.Repo = gitCommonDir
+	}
+	p := HistoryPath()
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		return err
 	}
@@ -42,9 +59,10 @@ func AppendHistory(gitCommonDir string, s Summary) error {
 	return err
 }
 
-// History returns the last n summaries, oldest first (sparkline order).
+// History returns your last n runs across every repo, oldest first (sparkline
+// order). gitCommonDir is accepted for symmetry with AppendHistory and ignored.
 func History(gitCommonDir string, n int) ([]Summary, error) {
-	f, err := os.Open(historyPath(gitCommonDir))
+	f, err := os.Open(HistoryPath())
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil

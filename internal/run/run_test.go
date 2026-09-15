@@ -43,6 +43,7 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 
 func TestHistoryTail(t *testing.T) {
 	dir := t.TempDir()
+	t.Setenv("LGTM_STATE", dir)
 	for i := 0; i < 25; i++ {
 		AppendHistory(dir, Summary{Branch: "b", EndedAt: time.Now(), Duration: time.Duration(i) * time.Second, Outcome: Done})
 	}

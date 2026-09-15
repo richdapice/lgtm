@@ -133,13 +133,6 @@ func Render(in Input, st Style) string {
 }
 
 func idle(in Input, st Style) string {
-	if in.NoRepo {
-		head := st.c(bold, "lgtm") + " ▸ " + st.c(dim, in.IdleRef+"   not a repo")
-		if p := in.Plan.render(st, in.Now); p != "" {
-			head += "   " + p
-		}
-		return row(st, "", head, "", "lgtm")
-	}
 	today, held := 0, 0
 	y, m, d := in.Now.Date()
 	for _, h := range in.History {
@@ -150,7 +143,11 @@ func idle(in Input, st Style) string {
 			}
 		}
 	}
-	head := st.c(bold, "lgtm") + " ▸ " + in.IdleRef + "   " + st.c(dim, "idle") + "   " + st.c(dim, fmt.Sprintf("%d runs today", today))
+	state := "idle"
+	if in.NoRepo {
+		state = "not a repo"
+	}
+	head := st.c(bold, "lgtm") + " ▸ " + in.IdleRef + "   " + st.c(dim, state) + "   " + st.c(dim, fmt.Sprintf("%d runs today", today))
 	if p := in.Plan.render(st, in.Now); p != "" {
 		head += "   " + p
 	}
