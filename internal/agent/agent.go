@@ -293,6 +293,16 @@ func (r Result) Text() string {
 	return string(r.Output)
 }
 
+// Text is the reply as plain text for free-form asks: the JSON string
+// unwrapped, or the raw output when it wasn't one.
+func (r Result) Text() string {
+	var s string
+	if json.Unmarshal(r.Output, &s) == nil {
+		return s
+	}
+	return string(r.Output)
+}
+
 func strconv(s string) string {
 	b, _ := json.Marshal(s)
 	return string(b)

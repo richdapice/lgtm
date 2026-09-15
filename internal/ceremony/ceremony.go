@@ -483,6 +483,9 @@ func (c *Ceremony) rounds(ctx context.Context) error {
 				}
 			} else {
 				c.log("round %d: %s not addressed: %s", round, v.ID, v.Note)
+				if p := c.run.Findings.ByID(v.ID); p != nil && v.Note != "" {
+					p.Note = "verify: " + v.Note
+				}
 			}
 		}
 		for _, f := range newFs {
@@ -767,6 +770,14 @@ func clipText(s string, n int) string {
 		return s[:n] + "…"
 	}
 	return s
+}
+
+func firstLines(s string, n int) string {
+	lines := strings.Split(s, "\n")
+	if len(lines) > n {
+		lines = append(lines[:n], "…")
+	}
+	return strings.Join(lines, "\n         ")
 }
 
 func checksText(rs []project.Result) string {

@@ -85,7 +85,8 @@ type Finding struct {
 	Rule     string   `json:"rule"` // short stable slug, e.g. "hardcoded-secret"
 	Body     string   `json:"body"`
 	State    State    `json:"state"`
-	Round    int      `json:"round"` // verify round that last touched it
+	Round    int      `json:"round"`          // verify round that last touched it
+	Note     string   `json:"note,omitempty"` // what the fixer or verifier said about it
 }
 
 // Anchored reports whether the finding points at a specific line. An unanchored

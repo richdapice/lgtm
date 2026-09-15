@@ -402,6 +402,9 @@ func (m *model) renderDiff() {
 		b.WriteString(row + "\n")
 	}
 	b.WriteString("\n" + lipgloss.NewStyle().Width(m.diff.Width-2).Render(f.Body) + "\n")
+	if f.Note != "" {
+		b.WriteString("\n" + sYellow.Render(lipgloss.NewStyle().Width(m.diff.Width-2).Render(f.Note)) + "\n")
+	}
 	m.diff.SetContent(b.String())
 	if anchorIdx > m.diff.Height/2 {
 		m.diff.SetYOffset(anchorIdx - m.diff.Height/2)

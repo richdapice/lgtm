@@ -236,6 +236,9 @@ func cmdFindings(args []string) error {
 			loc = fmt.Sprintf("%s:%d", f.Path, f.Line)
 		}
 		fmt.Printf("%s  %-9s %-5s %-12s %s  %s\n      %s\n", f.ID, f.State, f.Severity, f.Lens, loc, f.Rule, f.Body)
+		if f.Note != "" {
+			fmt.Printf("      ↳ %s\n", f.Note)
+		}
 	}
 	return nil
 }

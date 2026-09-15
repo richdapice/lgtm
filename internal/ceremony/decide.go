@@ -51,6 +51,9 @@ func (d LineDecider) Decide(ctx context.Context, open []finding.Finding, r *run.
 			fmt.Fprintf(d.Out, "      %s\n", a)
 		}
 		fmt.Fprintf(d.Out, "      %s\n", f.Body)
+		if f.Note != "" {
+			fmt.Fprintf(d.Out, "      ↳ %s\n", f.Note)
+		}
 	prompt:
 		fmt.Fprint(d.Out, "      > ")
 		line, err := rd.ReadString('\n')
