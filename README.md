@@ -7,20 +7,27 @@ Run it instead of `gh pr create`. It reads your diff, tells you what a careful r
 ```
 $ lgtm
 
- lgtm ▸ worktree-sync-throttle → main   2 need you   ≈$0.41
- ▸ · block correctness  src/main/sync.ts:142  swallowed-error
-   · ask   tests        src/main/sync.test.ts:88  missing-assert
+ lgtm · worktree-sync-throttle → main      2 findings need a decision      ≈$0.41
 
-    139 +   try {
-    140 +     await push(batch)
-  ▸ 142 +   } catch (err) { /* retry later */ }
-    143 +   }
+ FINDINGS
+ ▶ 1  block  src/main/sync.ts:140         swallowed-error                        [ undecided ]
+   2  ask    src/main/sync.test.ts:88     missing-assert                         [ undecided ]
 
-   The retry never happens — nothing schedules it. Either enqueue the retry here
-   or let the error surface; silently dropping it means a failed sync looks
-   identical to no sync.
+ FINDING 1 · correctness · src/main/sync.ts
+    136   export async function flush(batch: Event[]) {
+    137     const started = Date.now()
+    138 +   try {
+    139 +     await push(batch)
+ ▶  140 +   } catch (err) { /* retry later */ }
+    141     log(started)
+    142   }
+    143
+   The retry never happens — nothing schedules it. Either enqueue the retry here or let the
+   error surface; silently dropping it means a failed sync looks identical to no sync.
 
-   Fix   Accept   Dismiss   Skip     ↑↓ finding · ←→ action · ⏎ apply · A autopilot · q hold
+ WHAT DO YOU WANT TO DO WITH FINDING 1?
+    ▶ Fix      Accept      Dismiss      Skip
+   ↑↓ pick a finding · ←→ pick an action · Enter to apply · A autopilot · q quit for now
 ```
 
 ## Why
@@ -55,7 +62,7 @@ First it reads the diff. Four lenses look at what changed between your branch an
 
 Then it shows you what it found. Each finding is a `block` (must be fixed), an `ask` (your call), or a `file` (worth writing down, no need to stop). The `file` ones are recorded and stay out of your way. The rest go in the panel, one at a time, with the lines they point at.
 
-You decide. Pick a finding, pick an action, press Enter. Nothing happens until you do. When every finding has a decision, Enter once more submits the round.
+You decide. Each finding is numbered, its decision is spelled out next to it, and the panel asks what you want to do with the one you're on. Pick an action, press Enter. Nothing happens until you do. When every finding has a decision, Enter once more submits the round.
 
 The agent makes the fixes in your working tree. Your own checks then run on the files it touched (`vitest related`, `eslint`, `go vet`, whatever `init` found), and only a green result gets committed. A fix that breaks the tests is reverted, and you see why. After that it checks each finding you asked to fix against the new diff. This goes up to three rounds. Then it either ships or hands the rest back to you.
 
@@ -84,12 +91,12 @@ The panel draws under your prompt, so there's no full-screen takeover and your s
 
 | | |
 |---|---|
-| `↑` `↓` | choose a finding |
-| `←` `→` or `f` `a` `d` `s` | move the highlight across **Fix · Accept · Dismiss · Skip** |
-| `⏎` | apply it to the focused finding, then focus the next undecided one |
-| `⏎` again, once all are decided | submit the round |
+| `↑` `↓` | pick a finding |
+| `←` `→` or `f` `a` `d` `s` | pick an action: Fix, Accept, Dismiss, Skip |
+| `Enter` | apply it to that finding, then move to the next undecided one |
+| `Enter` again, once every finding has a decision | submit the round |
 | `A` | autopilot from here |
-| `q` | hold: park the run and come back later |
+| `q` | quit for now; the run waits and `lgtm` resumes it |
 
 What each action means:
 

@@ -1,0 +1,66 @@
+package tui
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"testing"
+
+	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
+
+	"github.com/richdapice/lgtm/internal/ceremony"
+	"github.com/richdapice/lgtm/internal/diffparse"
+	"github.com/richdapice/lgtm/internal/finding"
+	"github.com/richdapice/lgtm/internal/run"
+)
+
+const sample = `diff --git a/src/main/sync.ts b/src/main/sync.ts
+--- a/src/main/sync.ts
++++ b/src/main/sync.ts
+@@ -136,6 +136,9 @@
+ export async function flush(batch: Event[]) {
+   const started = Date.now()
++  try {
++    await push(batch)
++  } catch (err) { /* retry later */ }
+   log(started)
+ }
+`
+
+// TestReviewFrame renders the panel with color off. Run with -v to see it;
+// the README's hero frame is this output.
+func TestReviewFrame(t *testing.T) {
+	lipgloss.SetColorProfile(termenv.Ascii)
+	files, _ := diffparse.Parse(sample)
+	m := newModel(context.Background(), func() {})
+	m.width = 96
+	m.files = files
+	m.canFix = true
+	m.run = run.Run{Branch: "worktree-sync-throttle", Base: "main", CostUSD: 0.41}
+	m.open = []finding.Finding{
+		{ID: "a1", Severity: finding.Block, Lens: "correctness", Path: "src/main/sync.ts", Line: 140, Rule: "swallowed-error",
+			Body: "The retry never happens — nothing schedules it. Either enqueue the retry here or let the error surface; silently dropping it means a failed sync looks identical to no sync."},
+		{ID: "b2", Severity: finding.Ask, Lens: "tests", Path: "src/main/sync.test.ts", Line: 88, Rule: "missing-assert", Body: "x"},
+	}
+	m.pending = &decideMsg{}
+	m.marks = map[string]ceremony.Decision{}
+	out := m.View()
+	if os.Getenv("SHOW") != "" {
+		fmt.Println(out)
+	}
+	for _, want := range []string{"FINDINGS", "▶ 1", "[ undecided ]", "FINDING 1 · correctness", "▶  140", "WHAT DO YOU WANT TO DO WITH FINDING 1?", "▶ Fix"} {
+		if !contains(out, want) {
+			t.Errorf("frame missing %q\n%s", want, out)
+		}
+	}
+}
+
+func contains(s, sub string) bool {
+	for i := 0; i+len(sub) <= len(s); i++ {
+		if s[i:i+len(sub)] == sub {
+			return true
+		}
+	}
+	return false
+}

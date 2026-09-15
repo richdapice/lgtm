@@ -293,17 +293,22 @@ func (m *model) View() string {
 
 func (m *model) header() string {
 	r := m.run
-	h := sBold.Render("lgtm") + " ▸ " + sAccent.Render(r.Branch) + sFaint.Render(" → "+r.Base)
+	h := sBold.Render("lgtm") + sFaint.Render(" · ") + sAccent.Render(r.Branch) + sFaint.Render(" → "+r.Base)
 	switch {
 	case m.pending != nil:
-		h += "   " + sYellow.Render(fmt.Sprintf("%d need you", len(m.open)))
+		n := len(m.open)
+		word := "findings need"
+		if n == 1 {
+			word = "finding needs"
+		}
+		h += "      " + sYellow.Render(fmt.Sprintf("%d %s a decision", n, word))
 	case r.Phase != "":
-		h += "   " + sAccent.Render(m.spin.View()) + " " + sSubtle.Render(string(r.Phase))
+		h += "      " + sAccent.Render(m.spin.View()) + " " + sSubtle.Render(string(r.Phase))
+		if r.Round > 0 {
+			h += sFaint.Render(fmt.Sprintf(" · round %d of %d", r.Round, r.MaxRounds))
+		}
 	}
-	if r.Round > 0 {
-		h += sFaint.Render(fmt.Sprintf("   round %d/%d", r.Round, r.MaxRounds))
-	}
-	h += sFaint.Render(fmt.Sprintf("   ≈$%.2f", r.CostUSD))
+	h += sFaint.Render(fmt.Sprintf("      ≈$%.2f", r.CostUSD))
 	return h
 }
 
@@ -328,15 +333,38 @@ func (m *model) progress() string {
 	return b.String()
 }
 
+func decisionWord(d ceremony.Decision, decided bool) string {
+	if !decided {
+		return "undecided"
+	}
+	switch d {
+	case ceremony.Fix:
+		return "fix"
+	case ceremony.Accept:
+		return "accept"
+	case ceremony.Dismiss:
+		return "dismiss"
+	}
+	return "skip"
+}
+
+// review is laid out for someone seeing it the first time: numbered
+// findings with their decision spelled out, one section per thing, one
+// marker (▶) that always means "this is where you are", and a question
+// above the actions so the buttons have a subject.
 func (m *model) review() string {
 	var b strings.Builder
 	w := m.width
+	cur := m.open[m.cursor]
 
-	// the list: one line per finding, focused one highlighted
+	b.WriteString("\n " + sSubtle.Render("FINDINGS") + "\n")
 	for i, f := range m.open {
-		glyph := sFaint.Render("·")
-		if d, ok := m.marks[f.ID]; ok {
-			glyph = sGreen.Render(actions[actionIndex(d)].key)
+		d, decided := m.marks[f.ID]
+		word := decisionWord(d, decided)
+		if decided {
+			word = sGreen.Render(word)
+		} else {
+			word = sFaint.Render(word)
 		}
 		sev := sYellow.Render(fmt.Sprintf("%-5s", f.Severity))
 		if f.Severity == finding.Block {
@@ -348,21 +376,28 @@ func (m *model) review() string {
 		}
 		rule := f.Rule
 		if f.FixDeclined {
-			rule += "  " + sYellow.Render("needs you")
+			rule += sYellow.Render("  (needs your call)")
 		}
-		line := fmt.Sprintf(" %s %s %-12s %s  %s", glyph, sev, sSubtle.Render(f.Lens), loc, sFaint.Render(rule))
+		mark := " "
 		if i == m.cursor {
-			line = sRow.Width(w - 1).Render(sAccent.Render("▸") + line[1:])
-		} else {
-			line = " " + line
+			mark = sAccent.Render("▶")
+		}
+		line := fmt.Sprintf(" %s %d  %s  %-28s %s", mark, i+1, sev, loc, rule)
+		// the decision column sits at the right edge, inside the highlight
+		pad := w - 2 - lipgloss.Width(line) - lipgloss.Width(word) - 4
+		if pad < 2 {
+			pad = 2
+		}
+		line += strings.Repeat(" ", pad) + "[ " + word + " ]"
+		if i == m.cursor {
+			line = sRow.Render(line)
 		}
 		b.WriteString(line + "\n")
 	}
-	b.WriteString("\n")
 
-	// the focused finding: hunk, body, note
-	f := m.open[m.cursor]
-	lines, anchor := hunkAround(m.files, f.Path, f.Line, 4)
+	b.WriteString("\n " + sSubtle.Render(fmt.Sprintf("FINDING %d", m.cursor+1)) +
+		sFaint.Render(" · "+cur.Lens+" · "+cur.Path) + "\n")
+	lines, anchor := hunkAround(m.files, cur.Path, cur.Line, 4)
 	for i, l := range lines {
 		num := "    "
 		if l.NewNum > 0 {
@@ -379,39 +414,34 @@ func (m *model) review() string {
 		}
 		mark := " "
 		if i == anchor {
-			mark = sYellow.Render("▸")
+			mark = sAccent.Render("▶")
 		}
-		fmt.Fprintf(&b, "  %s%s %s\n", mark, sFaint.Render(num), text)
+		fmt.Fprintf(&b, " %s %s %s\n", mark, sFaint.Render(num), text)
 	}
-	if len(lines) > 0 {
-		b.WriteString("\n")
+	b.WriteString(indent(lipgloss.NewStyle().Width(w-4).Render(cur.Body), "   ") + "\n")
+	if cur.Note != "" {
+		b.WriteString(indent(sYellow.Render(lipgloss.NewStyle().Width(w-6).Render(cur.Note)), "   ↳ ") + "\n")
 	}
-	body := lipgloss.NewStyle().Width(w - 4).Render(f.Body)
-	b.WriteString(indent(body, "   ") + "\n")
-	if f.Note != "" {
-		note := lipgloss.NewStyle().Width(w - 6).Render(f.Note)
-		b.WriteString(indent(sYellow.Render(note), "   ↳ ") + "\n")
-	}
-	b.WriteString("\n")
 
-	// the action bar
+	b.WriteString("\n")
 	if m.allMarked() {
-		b.WriteString("   " + sSel.Render("⏎ submit") + "   " + sFaint.Render("↑↓ change a decision · q hold") + "\n")
+		b.WriteString(" " + sSubtle.Render("EVERY FINDING HAS A DECISION") + "\n")
+		b.WriteString("   " + sSel.Render("Enter: submit") + "   " + sFaint.Render("↑↓ go back and change one · q quit for now") + "\n")
 		return b.String()
 	}
-	b.WriteString("  ")
+	b.WriteString(" " + sSubtle.Render(fmt.Sprintf("WHAT DO YOU WANT TO DO WITH FINDING %d?", m.cursor+1)) + "\n   ")
 	for i, a := range actions {
 		switch {
 		case i == m.action:
-			b.WriteString(sSel.Render(a.label))
+			b.WriteString(sSel.Render("▶ " + a.label))
 		case i == 0 && !m.canFix:
-			b.WriteString(sOptOff.Render(a.label))
+			b.WriteString(sOptOff.Render("  " + a.label))
 		default:
-			b.WriteString(sOpt.Render(a.label))
+			b.WriteString(sOpt.Render("  " + a.label))
 		}
-		b.WriteString(" ")
+		b.WriteString("  ")
 	}
-	b.WriteString("   " + sFaint.Render("↑↓ finding · ←→ action · ⏎ apply · A autopilot · q hold") + "\n")
+	b.WriteString("\n   " + sFaint.Render("↑↓ pick a finding · ←→ pick an action · Enter to apply · A autopilot · q quit for now") + "\n")
 	return b.String()
 }
 
