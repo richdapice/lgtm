@@ -141,6 +141,14 @@ func TestPlanUsageInHeader(t *testing.T) {
 	}
 }
 
+func TestDurRollsIntoHours(t *testing.T) {
+	for d, want := range map[time.Duration]string{45 * time.Second: "45s", 72*time.Minute + 19*time.Second: "1h12m", 3*time.Hour + 5*time.Minute: "3h05m"} {
+		if got := dur(d); got != want {
+			t.Errorf("dur(%v) = %q, want %q", d, got, want)
+		}
+	}
+}
+
 func TestWidthStripsOSC8(t *testing.T) {
 	s := "\033]8;;https://x\033\\#119\033]8;;\033\\ ok"
 	if w := width(s); w != 7 {

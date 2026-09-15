@@ -119,6 +119,18 @@ func (s *Set) Open() []Finding {
 	return out
 }
 
+// NeedsYou counts open findings a human has to decide — file-severity ones
+// never count, whatever state an older run file left them in.
+func (s *Set) NeedsYou() int {
+	n := 0
+	for _, f := range s.Findings {
+		if f.State == Open && f.Severity != File {
+			n++
+		}
+	}
+	return n
+}
+
 // Blocking reports whether any open finding has Block severity.
 func (s *Set) Blocking() bool {
 	for _, f := range s.Findings {

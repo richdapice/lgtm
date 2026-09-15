@@ -216,7 +216,7 @@ func cmdStatus(args []string) error {
 	c := r.Findings.Counts()
 	phase := string(r.Phase)
 	if r.Phase == run.Held {
-		phase = fmt.Sprintf("needs you (%d)", c.Open)
+		phase = fmt.Sprintf("needs you (%d)", r.Findings.NeedsYou())
 	}
 	fmt.Printf("%s → %s  %s  %s  round %d/%d  ≈$%.2f\n", r.Branch, r.Base, r.Mode, phase, r.Round, r.MaxRounds, r.CostUSD)
 	fmt.Printf("%d open · %d fixed · %d accepted · %d dismissed · %d filed\n", c.Open, c.Fixed, c.Accepted, c.Dismissed, c.Filed)

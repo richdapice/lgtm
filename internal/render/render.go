@@ -202,7 +202,7 @@ func single(r *run.Run, now time.Time, st Style, plan *PlanUsage) string {
 	case run.Failed:
 		mode = st.c(bad, "failed")
 	case run.Held:
-		n := r.Findings.Counts().Open
+		n := r.Findings.NeedsYou()
 		mode = st.c(warn, fmt.Sprintf("%d need you", n))
 		if n == 1 {
 			mode = st.c(warn, "1 needs you")
@@ -333,7 +333,7 @@ func multi(runs []*run.Run, now time.Time, st Style) string {
 		case run.Fix, run.Verify:
 			state = st.c(accent, fmt.Sprintf("∴ round %d/%d", r.Round, r.MaxRounds))
 		case run.Held:
-			state = st.c(warn, fmt.Sprintf("→ %d need you", r.Findings.Counts().Open))
+			state = st.c(warn, fmt.Sprintf("→ %d need you", r.Findings.NeedsYou()))
 		case run.PR, run.CI:
 			if r.CI != nil {
 				state = fmt.Sprintf("◍ ci %d/%d", r.CI.Passed+r.CI.Failed, r.CI.Total)
@@ -430,10 +430,14 @@ func rpad(s string, w int) string {
 
 func dur(d time.Duration) string {
 	d = d.Round(time.Second)
-	if d < time.Minute {
+	switch {
+	case d < time.Minute:
 		return fmt.Sprintf("%ds", int(d.Seconds()))
+	case d < time.Hour:
+		return fmt.Sprintf("%dm%02ds", int(d.Minutes()), int(d.Seconds())%60)
+	default:
+		return fmt.Sprintf("%dh%02dm", int(d.Hours()), int(d.Minutes())%60)
 	}
-	return fmt.Sprintf("%dm%02ds", int(d.Minutes()), int(d.Seconds())%60)
 }
 
 func median(h []run.Summary) time.Duration {
