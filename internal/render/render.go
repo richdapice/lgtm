@@ -62,11 +62,15 @@ type Input struct {
 }
 
 type PlanUsage struct {
-	FiveHourPct int
-	SevenDayPct int
+	FiveHourPct   int
+	SevenDayPct   int
+	FiveHourReset time.Time // zero when unknown
+	SevenDayReset time.Time
 }
 
-func (p *PlanUsage) render(st Style) string {
+// render shows each window as "used ↺ time-until-reset". A percentage without
+// its reset is just anxiety; the reset is what tells you whether to wait.
+func (p *PlanUsage) render(st Style, now time.Time) string {
 	if p == nil {
 		return ""
 	}
@@ -79,8 +83,27 @@ func (p *PlanUsage) render(st Style) string {
 		}
 		return dim
 	}
-	return st.c(col(p.FiveHourPct), fmt.Sprintf("5h %d%%", p.FiveHourPct)) + st.c(dim, " · ") +
-		st.c(col(p.SevenDayPct), fmt.Sprintf("7d %d%%", p.SevenDayPct))
+	win := func(label string, pct int, reset time.Time) string {
+		s := st.c(col(pct), fmt.Sprintf("%s %d%%", label, pct))
+		if !reset.IsZero() && reset.After(now) {
+			s += st.c(dim, " ↺ "+until(reset.Sub(now)))
+		}
+		return s
+	}
+	return win("5h", p.FiveHourPct, p.FiveHourReset) + st.c(dim, " · ") + win("7d", p.SevenDayPct, p.SevenDayReset)
+}
+
+// until is a compact "time from now": 42m, 2h23m, 3d04h.
+func until(d time.Duration) string {
+	d = d.Round(time.Minute)
+	switch {
+	case d < time.Hour:
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%dh%02dm", int(d.Hours()), int(d.Minutes())%60)
+	default:
+		return fmt.Sprintf("%dd%02dh", int(d.Hours())/24, int(d.Hours())%24)
+	}
 }
 
 func cost(usd float64, st Style) string { return st.c(dim, fmt.Sprintf("≈$%.2f", usd)) }
@@ -120,7 +143,7 @@ func idle(in Input, st Style) string {
 		}
 	}
 	head := st.c(bold, "lgtm") + " ▸ " + in.IdleRef + "   " + st.c(dim, "idle") + "   " + st.c(dim, fmt.Sprintf("%d runs today", today))
-	if p := in.Plan.render(st); p != "" {
+	if p := in.Plan.render(st, in.Now); p != "" {
 		head += "   " + p
 	}
 	rows := []string{row(st, "", head, "", "lgtm")}
@@ -179,7 +202,11 @@ func single(r *run.Run, now time.Time, st Style, plan *PlanUsage) string {
 	case run.Failed:
 		mode = st.c(bad, "failed")
 	case run.Held:
-		mode = st.c(warn, "held")
+		n := r.Findings.Counts().Open
+		mode = st.c(warn, fmt.Sprintf("%d need you", n))
+		if n == 1 {
+			mode = st.c(warn, "1 needs you")
+		}
 	default:
 		if !r.Alive() {
 			mode = st.c(dim, "stale")
@@ -189,7 +216,7 @@ func single(r *run.Run, now time.Time, st Style, plan *PlanUsage) string {
 	// up under Claude Code's notification area and reads as a separate thing
 	head := st.c(bold, "lgtm") + " ▸ " + st.c(accent, r.Branch) + st.c(dim, " → "+r.Base) +
 		"   " + mode + "   " + st.c(dim, dur(r.Elapsed(now))) + "   " + cost(r.CostUSD, st)
-	if p := plan.render(st); p != "" {
+	if p := plan.render(st, now); p != "" {
 		head += "   " + p
 	}
 	rows = append(rows, row(st, "", head, "", "lgtm"))
@@ -230,9 +257,7 @@ func single(r *run.Run, now time.Time, st Style, plan *PlanUsage) string {
 	}
 	switch r.Phase {
 	case run.Held:
-		n := r.Findings.Counts().Open
-		body := st.c(warn, fmt.Sprintf("%d need you", n)) + "    " +
-			st.c(dim, "run lgtm on this branch to review · lgtm --auto to fix")
+		body := st.c(dim, "run lgtm on this branch to decide · lgtm --auto to fix what it can")
 		rows = append(rows, row(st, st.c(warn, "→"), body, "", "→"))
 	case run.Failed:
 		rows = append(rows, row(st, st.c(bad, "✗"), st.c(bad, r.Error), "", "✗"))

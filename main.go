@@ -137,10 +137,12 @@ func cmdStatusline(args []string) error {
 		} `json:"workspace"`
 		RateLimits *struct {
 			FiveHour *struct {
-				Used float64 `json:"used_percentage"`
+				Used  float64 `json:"used_percentage"`
+				Reset int64   `json:"resets_at"`
 			} `json:"five_hour"`
 			SevenDay *struct {
-				Used float64 `json:"used_percentage"`
+				Used  float64 `json:"used_percentage"`
+				Reset int64   `json:"resets_at"`
 			} `json:"seven_day"`
 		} `json:"rate_limits"`
 	}
@@ -164,9 +166,15 @@ func cmdStatusline(args []string) error {
 		plan = &render.PlanUsage{}
 		if rl.FiveHour != nil {
 			plan.FiveHourPct = int(rl.FiveHour.Used)
+			if rl.FiveHour.Reset > 0 {
+				plan.FiveHourReset = time.Unix(rl.FiveHour.Reset, 0)
+			}
 		}
 		if rl.SevenDay != nil {
 			plan.SevenDayPct = int(rl.SevenDay.Used)
+			if rl.SevenDay.Reset > 0 {
+				plan.SevenDayReset = time.Unix(rl.SevenDay.Reset, 0)
+			}
 		}
 	}
 	out := render.Render(render.Input{Runs: runs, History: hist, IdleRef: gitx.BranchFast(dir), Now: time.Now(), Plan: plan},
@@ -206,7 +214,11 @@ func cmdStatus(args []string) error {
 		return enc.Encode(r)
 	}
 	c := r.Findings.Counts()
-	fmt.Printf("%s → %s  %s  %s  round %d/%d  $%.2f\n", r.Branch, r.Base, r.Mode, r.Phase, r.Round, r.MaxRounds, r.CostUSD)
+	phase := string(r.Phase)
+	if r.Phase == run.Held {
+		phase = fmt.Sprintf("needs you (%d)", c.Open)
+	}
+	fmt.Printf("%s → %s  %s  %s  round %d/%d  ≈$%.2f\n", r.Branch, r.Base, r.Mode, phase, r.Round, r.MaxRounds, r.CostUSD)
 	fmt.Printf("%d open · %d fixed · %d accepted · %d dismissed · %d filed\n", c.Open, c.Fixed, c.Accepted, c.Dismissed, c.Filed)
 	if r.PR != nil {
 		fmt.Println(r.PR.URL)

@@ -75,13 +75,13 @@ func TestHeldLayout(t *testing.T) {
 	r.UpdatedAt = now.Add(-30 * time.Second)
 	out = Render(Input{Runs: []*run.Run{r}, Now: now.Add(10 * time.Minute)}, Style{Cols: 100})
 	ls = lines(out)
-	if !strings.Contains(ls[0], "held   1m44s") {
+	if !strings.Contains(ls[0], "4 need you   1m44s") {
 		t.Fatalf("held elapsed should freeze at UpdatedAt: %q", ls[0])
 	}
 	if !strings.Contains(ls[5], "● ● ●") || !strings.Contains(ls[5], "round 3/3") || !strings.Contains(ls[5], "4 open") {
 		t.Fatalf("loop row = %q", ls[5])
 	}
-	if !strings.Contains(ls[6], "4 need you") || !strings.Contains(ls[6], "run lgtm on this branch") {
+	if !strings.Contains(ls[6], "run lgtm on this branch to decide") {
 		t.Fatalf("prompt row = %q", ls[6])
 	}
 }
@@ -133,9 +133,10 @@ func TestColorDoesNotChangeWidth(t *testing.T) {
 }
 
 func TestPlanUsageInHeader(t *testing.T) {
-	out := Render(Input{Runs: []*run.Run{discoverRun()}, Now: now, Plan: &PlanUsage{FiveHourPct: 37, SevenDayPct: 85}}, Style{Cols: 110})
+	plan := &PlanUsage{FiveHourPct: 37, SevenDayPct: 85, FiveHourReset: now.Add(2*time.Hour + 23*time.Minute), SevenDayReset: now.Add(76 * time.Hour)}
+	out := Render(Input{Runs: []*run.Run{discoverRun()}, Now: now, Plan: plan}, Style{Cols: 120})
 	l := lines(out)[0]
-	if !strings.Contains(l, "≈$0.09   5h 37% · 7d 85%") {
+	if !strings.Contains(l, "≈$0.09   5h 37% ↺ 2h23m · 7d 85% ↺ 3d04h") {
 		t.Fatalf("header = %q (width %d)", l, width(l))
 	}
 }

@@ -76,7 +76,7 @@ It draws inline under your prompt — no full-screen takeover, your scrollback s
 
 ```
 ── a review in flight
-  lgtm ▸ worktree-sync-throttle → main   manual   1m12s   ≈$0.41   5h 37% · 7d 61%
+  lgtm ▸ worktree-sync-throttle → main   manual   1m12s   ≈$0.41   5h 37% ↺ 2h23m · 7d 61% ↺ 3d04h
       ─ review        ████████▊░░░░     –   opus      1m12s
 
 ── lenses in parallel (fanout = "parallel")
@@ -87,17 +87,17 @@ It draws inline under your prompt — no full-screen takeover, your scrollback s
       ╰ tests        ██████▎░░░░░░     –   sonnet  1m04s
  loop ● ● ○  round 2/3      4 open · 6 fixed · 2 filed
 
-── held, waiting on you
-  lgtm ▸ worktree-sync-throttle → main   held   3m16s   ≈$0.62
+── waiting on you
+  lgtm ▸ worktree-sync-throttle → main   2 need you   3m16s   ≈$0.62
  loop ● ● ●  round 3/3      2 open · 8 fixed · 3 filed
-    → 2 need you    run lgtm on this branch to review · lgtm --auto to fix
+    → run lgtm on this branch to decide · lgtm --auto to fix what it can
 
 ── PR open, watching CI
   lgtm ▸ worktree-sync-throttle → main   passed   4m01s   ≈$0.71
    ci ◍ #126   ▰▰▱▱   check 2/4 · 1m12s
 
 ── idle
-  lgtm ▸ main   idle   12 runs today   5h 37% · 7d 61%
+  lgtm ▸ main   idle   12 runs today   5h 37% ↺ 2h23m · 7d 61% ↺ 3d04h
       20 runs  ▂▃▂▅▂▂▇▃▂▂▄▂▃▂▂▃▅▂▂▃  median 2m38s · 3 held · streak 4
 ```
 
@@ -183,7 +183,7 @@ schema = "prompt"      # schema goes in the prompt; the reply is parsed lenientl
 
 ## Costs
 
-The `≈$` figures are estimates at API list price, computed locally. On a Claude Pro or Max subscription they are not charges — usage counts against your plan windows, which the status bar shows as `5h 37% · 7d 61%`. On a metered agent they are real; set `max_budget_usd`.
+The `≈$` figures are estimates at API list price, computed locally. On a Claude Pro or Max subscription they are not charges — usage counts against your plan's rolling 5-hour and 7-day windows, which the status bar shows as `5h 37% ↺ 2h23m · 7d 61% ↺ 3d04h`: how much of each window is used, and when it resets. On a metered agent they are real; set `max_budget_usd`.
 
 A review agent that can read the repo will read beyond the diff. That's where the good findings come from and where the cost goes.
 
