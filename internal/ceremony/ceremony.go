@@ -389,7 +389,17 @@ func (c *Ceremony) rounds(ctx context.Context) error {
 		}
 		var toFix []finding.Finding
 		if c.run.Mode == "auto" {
-			toFix = actionable
+			// autopilot fixes what can be fixed without a decision: block
+			// findings the fixer hasn't already declined. ask findings are,
+			// by definition, yours — sending them would only bounce.
+			for _, f := range actionable {
+				if f.Severity == finding.Block && !f.FixDeclined {
+					toFix = append(toFix, f)
+				}
+			}
+			if len(toFix) == 0 {
+				break
+			}
 		} else {
 			decisions, autopilot, quit := c.decider().Decide(ctx, actionable, c.run)
 			toFix = c.apply(decisions, actionable)
@@ -745,7 +755,19 @@ func (c *Ceremony) println(format string, a ...any) { fmt.Fprintf(c.o.Out, forma
 
 func (c *Ceremony) printHeld() {
 	open := c.actionable()
-	c.println("\n  not yet — %d need you. run `lgtm` again to review, or `lgtm --auto`.", len(open))
+	c.println("\n  not yet — %d need you:", len(open))
+	for _, f := range open {
+		loc := f.Path
+		if f.Line > 0 {
+			loc = fmt.Sprintf("%s:%d", f.Path, f.Line)
+		}
+		why := ""
+		if f.FixDeclined {
+			why = " · fixer declined, needs your decision"
+		}
+		c.println("    %-5s %s  %s%s", f.Severity, loc, f.Rule, why)
+	}
+	c.println("  run `lgtm` to decide.")
 }
 
 // dirtyFiles is what the fixer touched: modified, added, and untracked paths

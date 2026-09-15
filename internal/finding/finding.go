@@ -87,6 +87,9 @@ type Finding struct {
 	State    State    `json:"state"`
 	Round    int      `json:"round"`          // verify round that last touched it
 	Note     string   `json:"note,omitempty"` // what the fixer or verifier said about it
+	// FixDeclined is set when the fixer looked and refused — it needs a human
+	// decision. Autopilot never re-sends one of these; a person can.
+	FixDeclined bool `json:"fix_declined,omitempty"`
 }
 
 // Anchored reports whether the finding points at a specific line. An unanchored

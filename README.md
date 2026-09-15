@@ -32,7 +32,7 @@ round 1/3: 2 fixed · 0 filed · 0 open
 3. **PR.** It pushes, writes the PR body from the diff and the literal check output, and opens the PR.
 4. **CI.** It watches the checks and keeps the status bar honest. It never repairs and never force-pushes.
 
-Manual mode is the default. Press `A` during a review to hand the rest to autopilot; `lgtm --auto` starts there.
+Manual mode is the default. Press `A` during a review to hand the rest to autopilot; `lgtm --auto` starts there. Autopilot fixes `block` findings; `ask` findings are yours by definition and come straight to you, and a finding the fixer has declined once is never sent again automatically.
 
 ## Four promises
 

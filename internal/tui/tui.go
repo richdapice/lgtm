@@ -346,7 +346,11 @@ func (m *model) review() string {
 		if f.Line > 0 {
 			loc += fmt.Sprintf(":%d", f.Line)
 		}
-		line := fmt.Sprintf(" %s %s %-12s %s  %s", glyph, sev, sSubtle.Render(f.Lens), loc, sFaint.Render(f.Rule))
+		rule := f.Rule
+		if f.FixDeclined {
+			rule += "  " + sYellow.Render("needs you")
+		}
+		line := fmt.Sprintf(" %s %s %-12s %s  %s", glyph, sev, sSubtle.Render(f.Lens), loc, sFaint.Render(rule))
 		if i == m.cursor {
 			line = sRow.Width(w - 1).Render(sAccent.Render("▸") + line[1:])
 		} else {
