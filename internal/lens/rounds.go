@@ -118,7 +118,11 @@ func BuildFixPrompt(fs []finding.Finding, conventions string) string {
 	}
 	b.WriteString("--- FINDINGS ---\n")
 	for i, f := range fs {
-		fmt.Fprintf(&b, "%d. [%s] %s:%d  %s\n   anchor: %s\n   %s\n\n", i+1, f.Severity, f.Path, f.Line, f.Rule, f.Anchor, f.Body)
+		fmt.Fprintf(&b, "%d. [%s] %s:%d  %s\n   anchor: %s\n   %s\n", i+1, f.Severity, f.Path, f.Line, f.Rule, f.Anchor, f.Body)
+		if strings.HasPrefix(f.Note, "author: ") {
+			fmt.Fprintf(&b, "   THE AUTHOR HAS DECIDED: %s\n   Do it that way; this is no longer a judgement call.\n", strings.TrimPrefix(f.Note, "author: "))
+		}
+		b.WriteString("\n")
 	}
 	return b.String()
 }

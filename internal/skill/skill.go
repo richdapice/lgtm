@@ -27,9 +27,9 @@ Show the user only findings with state "open" and severity "block" or "ask". For
 
 ## Record decisions
 
-    lgtm decide ID fix|accept|dismiss|skip [-b BRANCH]
+    lgtm decide ID fix|accept|dismiss|skip [-m "instruction"] [-b BRANCH]
 
-One call per finding. Use the id prefix from findings --json. dismiss also adds the finding to the repo's committed dismiss-list, so it never comes back — confirm with the user before dismissing.
+One call per finding. When a finding is fix_declined, the fixer needs a direction: ask the user which way, then pass it with -m — that re-arms the finding. Use the id prefix from findings --json. dismiss also adds the finding to the repo's committed dismiss-list, so it never comes back — confirm with the user before dismissing.
 
 ## Continue the run
 

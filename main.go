@@ -383,7 +383,7 @@ func flagsFirst(args []string) []string {
 		if strings.HasPrefix(a, "-") {
 			flags = append(flags, a)
 			// -b takes a value; boolean flags don't
-			if (a == "-b" || a == "--b" || a == "-r" || a == "--r") && i+1 < len(args) {
+			if (a == "-b" || a == "--b" || a == "-r" || a == "--r" || a == "-m" || a == "--m") && i+1 < len(args) {
 				flags = append(flags, args[i+1])
 				i++
 			}
@@ -413,9 +413,10 @@ func cmdDecide(ctx context.Context, args []string) error {
 	args = flagsFirst(args)
 	fs := flag.NewFlagSet("decide", flag.ExitOnError)
 	branch := fs.String("b", "", "branch (any worktree of this repo)")
+	msg := fs.String("m", "", "with fix: tell the fixer which way to go (re-arms a declined finding)")
 	fs.Parse(args)
 	if fs.NArg() != 2 {
-		return errors.New("usage: lgtm decide ID fix|accept|dismiss|skip [-b BRANCH]")
+		return errors.New("usage: lgtm decide ID fix|accept|dismiss|skip [-m INSTRUCTION] [-b BRANCH]")
 	}
 	if _, ok := ceremony.ParseDecision(fs.Arg(1)); !ok {
 		return fmt.Errorf("decision must be fix, accept, dismiss, or skip; got %q", fs.Arg(1))
@@ -438,6 +439,12 @@ func cmdDecide(ctx context.Context, args []string) error {
 		r.Decisions = map[string]string{}
 	}
 	r.Decisions[f.ID] = fs.Arg(1)
+	if *msg != "" {
+		// the author's direction goes on the finding, where the fix prompt
+		// reads it; a declined finding with a direction is fair game again
+		f.Note = "author: " + *msg
+		f.FixDeclined = false
+	}
 	if err := r.Save(common); err != nil {
 		return err
 	}
