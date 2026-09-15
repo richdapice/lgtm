@@ -75,7 +75,11 @@ func main() {
 	case "doctor":
 		err = cmdDoctor(ctx)
 	case "demo":
-		err = tui.Demo(ctx)
+		if len(args) > 0 && args[0] == "bar" {
+			err = tui.DemoBar(ctx)
+		} else {
+			err = tui.Demo(ctx)
+		}
 	case "init":
 		err = cmdInit(ctx, args)
 	case "decide":
@@ -111,6 +115,7 @@ func usage() {
   lgtm init [-y] [--statusline] [--skill]             detect projects, write .lgtm.toml; wire the status bar and the /lgtm skill
   lgtm doctor                                         check each configured agent answers
   lgtm demo                                           a scripted run in the real panel; no agent, no repo
+  lgtm demo bar                                       the status bar through a scripted run, redrawn in place
   lgtm version
 
 Exit codes: 0 done · 1 error · 2 held (findings need you; run lgtm again)

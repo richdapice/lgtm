@@ -2,6 +2,8 @@
 
 **Fresh eyes on your branch before the PR opens.**
 
+![lgtm reviewing a branch: findings, a decision, the gates, the stamp](docs/demo.gif)
+
 Run it instead of `gh pr create`. It reads your diff, tells you what a careful reviewer would have said, fixes what you tell it to, opens the pull request, and watches CI.
 
 ```
@@ -151,6 +153,10 @@ lgtm continue --auto -b my-branch       # …and autopilot the rest
 ## The status bar
 
 `lgtm init --statusline` adds a live bar to Claude Code's status line. It renders in about four milliseconds and changes shape with the run:
+
+![the status bar mid-run: gate track and rounds](docs/bar.png)
+
+![the status bar through a whole run](docs/bar.gif)
 
 ```
 ── a review in flight
