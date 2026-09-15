@@ -108,11 +108,15 @@ func DecodeVerify(out json.RawMessage, known map[string]bool, allowed []string) 
 
 // BuildFixPrompt asks the edit-capable agent to fix exactly these findings and
 // nothing else. The checks that follow are what catch it if it does more.
-func BuildFixPrompt(fs []finding.Finding, conventions string) string {
+func BuildFixPrompt(fs []finding.Finding, conventions string, autopilot bool) string {
 	var b strings.Builder
 	b.WriteString("Fix the findings below in the working tree. Make the smallest change that resolves each one. ")
 	b.WriteString("Do not refactor, do not touch code outside what a finding names, do not add comments explaining the fix, and do not commit — the caller commits.\n")
+	if autopilot {
+		b.WriteString("AUTOPILOT: the author has delegated judgement calls to you. Where a finding has more than one reasonable resolution, choose the smallest, least surprising one and do it. Leave a finding only if every resolution would change product behavior in a way the author could not want; then reply with one line starting \"declined:\" that names why. Otherwise reply with one line per finding saying what you changed.\n\n")
+	} else {
 	b.WriteString("If a finding cannot be fixed without a decision the author should make, leave it and reply with one line starting \"declined:\" that names the decision. Otherwise reply with one line per finding saying what you changed.\n\n")
+	}
 	if conventions != "" {
 		b.WriteString("--- CONVENTIONS ---\n" + conventions + "\n\n")
 	}
