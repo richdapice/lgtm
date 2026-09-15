@@ -34,7 +34,7 @@ One call per finding. When a finding is fix_declined, the fixer needs a directio
 ## Continue the run
 
     lgtm continue [-b BRANCH]           # applies recorded decisions, runs the round, opens the PR, watches CI
-    lgtm continue --auto [-b BRANCH]    # same, then autopilot: fixes block findings without asking
+    lgtm continue --auto [-b BRANCH]    # same, then autopilot: fixes everything it can, files the rest, never holds
     lgtm continue --no-pr [-b BRANCH]   # review only; stop before pushing
 
 continue is synchronous and may take a few minutes (fix round, checks, PR, CI). Run it in the background and report when it finishes. Exit 0 means the PR is open and the run printed its LGTM stamp; exit 2 means it held again — run findings --json and show what is still waiting.

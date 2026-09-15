@@ -413,11 +413,11 @@ func (c *Ceremony) rounds(ctx context.Context) error {
 				return nil
 			}
 		} else if c.run.Mode == "auto" {
-			// autopilot fixes what can be fixed without a decision: block
-			// findings the fixer hasn't already declined. ask findings are,
-			// by definition, yours — sending them would only bounce.
+			// autopilot means the author delegated the judgement calls too:
+			// everything not already declined goes to the fixer, and what
+			// comes back unfixed is filed, not held
 			for _, f := range actionable {
-				if f.Severity == finding.Block && !f.FixDeclined {
+				if !f.FixDeclined {
 					toFix = append(toFix, f)
 				}
 			}
@@ -449,7 +449,7 @@ func (c *Ceremony) rounds(ctx context.Context) error {
 		c.run.Round = round
 		c.run.Phase = run.Fix
 		c.save()
-		fixRes, err := c.fixer.Ask(ctx, lens.BuildFixPrompt(toFix, c.conventions), nil)
+		fixRes, err := c.fixer.Ask(ctx, lens.BuildFixPrompt(toFix, c.conventions, c.run.Mode == "auto"), nil)
 		c.addCost(fixRes.CostUSD)
 		c.logCall("fix", fixRes)
 		if err != nil {
@@ -532,9 +532,33 @@ func (c *Ceremony) rounds(ctx context.Context) error {
 		c.save()
 	}
 	if len(c.actionable()) > 0 {
+		if c.run.Mode == "auto" {
+			// never bother the author: whatever's left is noted for the PR
+			for _, f := range c.actionable() {
+				if p := c.run.Findings.ByID(f.ID); p != nil {
+					p.State = finding.Filed
+					if p.Note == "" {
+						p.Note = "autopilot: left unaddressed"
+					}
+				}
+			}
+			c.save()
+			return nil
+		}
 		c.run.Phase = run.Held
 	}
 	return nil
+}
+
+// unfixedBlock reports whether autopilot filed a block finding without fixing
+// it — the one case where the PR opens as a draft rather than ready.
+func (c *Ceremony) unfixedBlock() bool {
+	for _, f := range c.run.Findings.Findings {
+		if f.State == finding.Filed && f.Severity == finding.Block {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *Ceremony) actionable() []finding.Finding {
@@ -611,7 +635,12 @@ func (c *Ceremony) openPR(ctx context.Context) error {
 	if title == "" {
 		return errors.New("pr body: agent returned no title")
 	}
-	n, url, err := c.gh.CreatePR(ctx, c.base, c.branch, title, body, c.o.Draft)
+	draft := c.o.Draft
+	if c.unfixedBlock() {
+		draft = true
+		c.println("a block finding shipped unfixed — opening as a draft")
+	}
+	n, url, err := c.gh.CreatePR(ctx, c.base, c.branch, title, body, draft)
 	if err != nil {
 		return err
 	}
