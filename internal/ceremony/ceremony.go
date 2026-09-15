@@ -43,6 +43,12 @@ type Options struct {
 	In     io.Reader
 	Out    io.Writer
 	Log    *log.Logger
+
+	// Decider answers for the human in manual mode. nil = line prompt on In/Out.
+	Decider Decider
+	// OnUpdate fires after every state save with a snapshot, so a UI can draw
+	// progress without polling the run file.
+	OnUpdate func(run.Run)
 }
 
 type Ceremony struct {
@@ -66,10 +72,19 @@ type Ceremony struct {
 }
 
 func Run(ctx context.Context, o Options) error {
-	c, err := prepare(ctx, o)
+	c, err := Prepare(ctx, o)
 	if err != nil {
 		return err
 	}
+	return c.Run(ctx)
+}
+
+// Prepare resolves git, config, and agents without spending anything. A UI
+// calls this first so it can show the branch and lenses before Run starts.
+func Prepare(ctx context.Context, o Options) (*Ceremony, error) { return prepare(ctx, o) }
+
+// Run executes a prepared ceremony.
+func (c *Ceremony) Run(ctx context.Context) error {
 	if err := c.discover(ctx); err != nil {
 		return c.fail(err)
 	}
@@ -81,7 +96,7 @@ func Run(ctx context.Context, o Options) error {
 		c.printHeld()
 		return ErrHeld
 	}
-	if o.NoPR {
+	if c.o.NoPR {
 		return c.finish(run.Done)
 	}
 	if err := c.openPR(ctx); err != nil {
@@ -375,11 +390,15 @@ func (c *Ceremony) rounds(ctx context.Context) error {
 		if c.run.Mode == "auto" {
 			toFix = actionable
 		} else {
-			var quit bool
-			toFix, quit = c.manual(actionable)
+			decisions, autopilot, quit := c.decider().Decide(ctx, actionable, c.run)
+			toFix = c.apply(decisions, actionable)
 			if quit {
 				c.run.Phase = run.Held
 				return nil
+			}
+			if autopilot {
+				c.run.Mode = "auto"
+				c.save()
 			}
 		}
 		if len(toFix) == 0 {
@@ -625,11 +644,34 @@ func (c *Ceremony) fail(err error) error {
 
 func (c *Ceremony) save() {
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	if err := c.run.Save(c.common); err != nil {
 		c.log("save: %v", err)
 	}
+	var snap run.Run
+	if c.o.OnUpdate != nil {
+		snap = *c.run
+		snap.Lenses = append([]run.Lens(nil), c.run.Lenses...)
+		snap.Findings.Findings = append([]finding.Finding(nil), c.run.Findings.Findings...)
+	}
+	c.mu.Unlock()
+	if c.o.OnUpdate != nil {
+		c.o.OnUpdate(snap)
+	}
 }
+
+func (c *Ceremony) decider() Decider {
+	if c.o.Decider != nil {
+		return c.o.Decider
+	}
+	return LineDecider{In: c.o.In, Out: c.o.Out, CanFix: c.fixer != nil}
+}
+
+// Files is the parsed diff, for a UI that wants to show the hunk a finding
+// points at. Stable after prepare; refreshed after each fix round.
+func (c *Ceremony) Files() []diffparse.FileDiff { return c.files }
+
+// CanFix reports whether the configured agent has a fix_command.
+func (c *Ceremony) CanFix() bool { return c.fixer != nil }
 
 func (c *Ceremony) setLens(name string, st run.LensState, found int) {
 	c.mu.Lock()

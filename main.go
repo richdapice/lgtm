@@ -27,6 +27,8 @@ import (
 	"github.com/richdapice/lgtm/internal/render"
 	"github.com/richdapice/lgtm/internal/run"
 	"github.com/richdapice/lgtm/internal/setup"
+	"github.com/richdapice/lgtm/internal/tui"
+	"golang.org/x/term"
 )
 
 var version = "dev"
@@ -80,7 +82,8 @@ func main() {
 func usage() {
 	fmt.Print(`lgtm — review a branch, then open the PR
 
-  lgtm [--auto] [--intent TEXT] [--draft] [--no-pr]   run the ceremony on the current branch
+  lgtm [--auto] [--intent TEXT] [--draft] [--no-pr] [--plain]
+                                                      review the current branch, then open the PR
   lgtm statusline                                     render the status bar (reads Claude Code JSON on stdin)
   lgtm status [--json]                                current run for this branch
   lgtm findings [--json]                              the finding set
@@ -100,9 +103,18 @@ func cmdRun(ctx context.Context, args []string, logger *log.Logger) error {
 	intent := fs.String("intent", "", "what the change is for (default: the branch's commit messages)")
 	draft := fs.Bool("draft", false, "open the PR as a draft")
 	noPR := fs.Bool("no-pr", false, "review only; do not push or open a PR")
+	plain := fs.Bool("plain", false, "line prompts instead of the screen (default when stdout is not a terminal)")
 	fs.Parse(args)
 	cwd, _ := os.Getwd()
-	return ceremony.Run(ctx, ceremony.Options{Dir: cwd, Auto: *auto, Intent: *intent, Draft: *draft, NoPR: *noPR, Log: logger})
+	opts := ceremony.Options{Dir: cwd, Auto: *auto, Intent: *intent, Draft: *draft, NoPR: *noPR, Log: logger}
+	if *plain || !term.IsTerminal(int(os.Stdout.Fd())) || !term.IsTerminal(int(os.Stdin.Fd())) {
+		return ceremony.Run(ctx, opts)
+	}
+	transcript, err := tui.Run(ctx, opts)
+	if transcript != "" {
+		fmt.Print(transcript)
+	}
+	return err
 }
 
 // cmdStatusline must stay fast: no git exec, no network. It resolves the repo
