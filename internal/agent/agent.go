@@ -293,7 +293,6 @@ func (r Result) Text() string {
 	return string(r.Output)
 }
 
-
 func strconv(s string) string {
 	b, _ := json.Marshal(s)
 	return string(b)
