@@ -218,6 +218,9 @@ func prepare(ctx context.Context, o Options) (*Ceremony, error) {
 	if prev, err := run.Load(c.common, c.branch); err == nil && prev.Phase == run.Held && prev.Tree == c.tree {
 		c.run = prev
 		c.run.PID = os.Getpid()
+		// the mode is per invocation, not sticky: a plain `lgtm` after an
+		// `lgtm --auto` that held should open the panel, not bounce again
+		c.run.Mode = c.repo.Settings.Mode
 		if o.Auto {
 			c.run.Mode = "auto"
 		}
