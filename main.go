@@ -232,6 +232,7 @@ func loadCurrent(ctx context.Context, branch string) (*run.Run, string, error) {
 }
 
 func cmdStatus(args []string) error {
+	args = flagsFirst(args)
 	fs := flag.NewFlagSet("status", flag.ExitOnError)
 	asJSON := fs.Bool("json", false, "machine-readable")
 	branch := fs.String("b", "", "branch (any worktree of this repo)")
@@ -262,6 +263,7 @@ func cmdStatus(args []string) error {
 }
 
 func cmdFindings(args []string) error {
+	args = flagsFirst(args)
 	fs := flag.NewFlagSet("findings", flag.ExitOnError)
 	asJSON := fs.Bool("json", false, "machine-readable")
 	branch := fs.String("b", "", "branch (any worktree of this repo)")
@@ -289,6 +291,7 @@ func cmdFindings(args []string) error {
 }
 
 func cmdDismiss(ctx context.Context, args []string) error {
+	args = flagsFirst(args)
 	fs := flag.NewFlagSet("dismiss", flag.ExitOnError)
 	reason := fs.String("r", "", "why")
 	branch := fs.String("b", "", "branch (any worktree of this repo)")
@@ -371,6 +374,26 @@ func cmdInit(ctx context.Context, args []string) error {
 	return nil
 }
 
+// flagsFirst lets flags follow positionals (`lgtm decide ID accept -b X`):
+// Go's flag package stops at the first non-flag, so move flags to the front.
+func flagsFirst(args []string) []string {
+	var flags, pos []string
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		if strings.HasPrefix(a, "-") {
+			flags = append(flags, a)
+			// -b takes a value; boolean flags don't
+			if (a == "-b" || a == "--b" || a == "-r" || a == "--r") && i+1 < len(args) {
+				flags = append(flags, args[i+1])
+				i++
+			}
+			continue
+		}
+		pos = append(pos, a)
+	}
+	return append(flags, pos...)
+}
+
 func findByPrefix(r *run.Run, id string) *finding.Finding {
 	var hit *finding.Finding
 	for i := range r.Findings.Findings {
@@ -387,6 +410,7 @@ func findByPrefix(r *run.Run, id string) *finding.Finding {
 // cmdDecide records a decision on a held run without a terminal. The run
 // file is the mailbox; `continue` reads it.
 func cmdDecide(ctx context.Context, args []string) error {
+	args = flagsFirst(args)
 	fs := flag.NewFlagSet("decide", flag.ExitOnError)
 	branch := fs.String("b", "", "branch (any worktree of this repo)")
 	fs.Parse(args)
@@ -423,6 +447,7 @@ func cmdDecide(ctx context.Context, args []string) error {
 
 // cmdContinue resumes a held run with recorded decisions, no terminal needed.
 func cmdContinue(ctx context.Context, args []string, logger *log.Logger) error {
+	args = flagsFirst(args)
 	fs := flag.NewFlagSet("continue", flag.ExitOnError)
 	auto := fs.Bool("auto", false, "after applying decisions, fix remaining block findings without asking")
 	noPR := fs.Bool("no-pr", false, "review only; do not push or open a PR")
