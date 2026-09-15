@@ -1,8 +1,11 @@
-// Package tui is the review surface: findings on the left, the hunk each one
-// points at on the right, single-key decisions. The ceremony runs in a
-// goroutine and talks to the screen through messages — it never knows it has a
-// UI, it just asks a Decider and calls OnUpdate. The Decider here blocks on a
-// channel until the human submits.
+// Package tui is the review surface: a compact panel drawn inline under your
+// prompt — not a full-screen app. One finding at a time is in focus with the
+// hunk it points at; the others are one line each; the action you're about to
+// take is a visible highlight. Nothing is applied until Enter.
+//
+// The ceremony runs in a goroutine and never knows it has a screen: it asks a
+// Decider and calls OnUpdate. The Decider here blocks on a channel until the
+// human submits.
 package tui
 
 import (
@@ -11,7 +14,6 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/spinner"
-	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -21,9 +23,11 @@ import (
 	"github.com/richdapice/lgtm/internal/run"
 )
 
-// Run prepares the ceremony, opens the screen, and drives it to completion.
+const maxWidth = 100
+
+// Run prepares the ceremony, opens the panel, and drives it to completion.
 // Everything the ceremony printed comes back as a transcript so the caller
-// can put it on stdout after the screen closes.
+// can put it on stdout after the panel closes.
 func Run(ctx context.Context, o ceremony.Options) (transcript string, err error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -41,7 +45,7 @@ func Run(ctx context.Context, o ceremony.Options) (transcript string, err error)
 	m.canFix = c.CanFix()
 	m.decider.files = c.Files
 
-	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithContext(ctx))
+	p := tea.NewProgram(m, tea.WithContext(ctx))
 	m.program = p
 	go func() { p.Send(doneMsg{c.Run(ctx)}) }()
 	if _, perr := p.Run(); perr != nil && ctx.Err() == nil {
@@ -56,10 +60,9 @@ type updateMsg struct{ run run.Run }
 type doneMsg struct{ err error }
 type noteMsg struct{ line string }
 
-// decideMsg carries the ceremony's question; the model answers on reply.
 type decideMsg struct {
 	open  []finding.Finding
-	files []diffparse.FileDiff // the diff as of this round; fix rounds rewrite it
+	files []diffparse.FileDiff
 	reply chan decideReply
 }
 type decideReply struct {
@@ -70,6 +73,17 @@ type decideReply struct {
 
 // ---- model ----
 
+var actions = []struct {
+	label string
+	d     ceremony.Decision
+	key   string
+}{
+	{"Fix", ceremony.Fix, "f"},
+	{"Accept", ceremony.Accept, "a"},
+	{"Dismiss", ceremony.Dismiss, "d"},
+	{"Skip", ceremony.Skip, "s"},
+}
+
 type model struct {
 	ctx     context.Context
 	cancel  context.CancelFunc
@@ -77,31 +91,27 @@ type model struct {
 	out     *transcript
 	decider *chanDecider
 
-	run     run.Run
-	files   []diffparse.FileDiff
-	canFix  bool
-	notes   []string
-	spin    spinner.Model
-	width   int
-	height  int
-	diff    viewport.Model
+	run    run.Run
+	files  []diffparse.FileDiff
+	canFix bool
+	notes  []string
+	spin   spinner.Model
+	width  int
+
 	pending *decideMsg
 	open    []finding.Finding
 	marks   map[string]ceremony.Decision
-	cursor  int
+	cursor  int // which finding
+	action  int // which action is highlighted
 	done    bool
 	result  error
 }
 
 func newModel(ctx context.Context, cancel context.CancelFunc) *model {
-	// a sane size until the terminal reports one; a pty that never does
-	// (some CI, some multiplexers) must still get a screen, not a blank
-	m := &model{ctx: ctx, cancel: cancel, marks: map[string]ceremony.Decision{}, width: 100, height: 30}
+	m := &model{ctx: ctx, cancel: cancel, marks: map[string]ceremony.Decision{}, width: 90}
 	m.out = &transcript{m: m}
 	m.decider = &chanDecider{m: m}
 	m.spin = spinner.New(spinner.WithSpinner(spinner.MiniDot))
-	m.diff = viewport.New(0, 0)
-	m.layout()
 	return m
 }
 
@@ -116,8 +126,10 @@ func (m *model) Init() tea.Cmd { return m.spin.Tick }
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.width, m.height = msg.Width, msg.Height
-		m.layout()
+		m.width = msg.Width
+		if m.width > maxWidth {
+			m.width = maxWidth
+		}
 		return m, nil
 	case spinner.TickMsg:
 		var cmd tea.Cmd
@@ -128,8 +140,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case noteMsg:
 		m.notes = append(m.notes, msg.line)
-		if len(m.notes) > 6 {
-			m.notes = m.notes[len(m.notes)-6:]
+		if len(m.notes) > 4 {
+			m.notes = m.notes[len(m.notes)-4:]
 		}
 		return m, nil
 	case decideMsg:
@@ -139,8 +151,10 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.files = msg.files
 		}
 		m.marks = map[string]ceremony.Decision{}
-		m.cursor = 0
-		m.renderDiff()
+		m.cursor, m.action = 0, 0
+		if !m.canFix {
+			m.action = 1
+		}
 		return m, nil
 	case doneMsg:
 		m.done = true
@@ -150,6 +164,15 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.key(msg)
 	}
 	return m, nil
+}
+
+func (m *model) allMarked() bool {
+	for _, f := range m.open {
+		if _, ok := m.marks[f.ID]; !ok {
+			return false
+		}
+	}
+	return len(m.open) > 0
 }
 
 func (m *model) key(k tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -164,37 +187,45 @@ func (m *model) key(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
-	cur := m.open[m.cursor]
-	mark := func(d ceremony.Decision) {
-		m.marks[cur.ID] = d
-		if m.cursor < len(m.open)-1 {
-			m.cursor++
-			m.renderDiff()
-		}
-	}
 	switch k.String() {
-	case "j", "down":
-		if m.cursor < len(m.open)-1 {
-			m.cursor++
-			m.renderDiff()
-		}
-	case "k", "up":
+	case "up", "k":
 		if m.cursor > 0 {
 			m.cursor--
-			m.renderDiff()
 		}
-	case "f":
-		if m.canFix {
-			mark(ceremony.Fix)
-		} else {
-			m.notes = append(m.notes, "no fix_command configured for this agent")
+	case "down", "j":
+		if m.cursor < len(m.open)-1 {
+			m.cursor++
 		}
-	case "a":
-		mark(ceremony.Accept)
-	case "d":
-		mark(ceremony.Dismiss)
-	case "s":
-		mark(ceremony.Skip)
+	case "left", "h", "shift+tab":
+		m.action = (m.action + len(actions) - 1) % len(actions)
+		if !m.canFix && m.action == 0 {
+			m.action = len(actions) - 1
+		}
+	case "right", "l", "tab":
+		m.action = (m.action + 1) % len(actions)
+		if !m.canFix && m.action == 0 {
+			m.action = 1
+		}
+	case "f", "a", "d", "s":
+		for i, a := range actions {
+			if a.key == k.String() && (m.canFix || i != 0) {
+				m.action = i
+			}
+		}
+	case "enter":
+		if m.allMarked() {
+			m.submit(false, false)
+			return m, nil
+		}
+		m.marks[m.open[m.cursor].ID] = actions[m.action].d
+		// move to the next undecided finding, if there is one
+		for i := 1; i <= len(m.open); i++ {
+			j := (m.cursor + i) % len(m.open)
+			if _, ok := m.marks[m.open[j].ID]; !ok {
+				m.cursor = j
+				break
+			}
+		}
 	case "A":
 		if m.canFix {
 			for _, f := range m.open {
@@ -204,8 +235,6 @@ func (m *model) key(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			m.submit(true, false)
 		}
-	case "enter":
-		m.submit(false, false)
 	case "q":
 		m.submit(false, true)
 	}
@@ -221,23 +250,6 @@ func (m *model) submit(autopilot, quit bool) {
 	m.open = nil
 }
 
-func (m *model) layout() {
-	m.diff.Width = m.width - m.listWidth() - 3
-	m.diff.Height = m.height - 5
-	m.renderDiff()
-}
-
-func (m *model) listWidth() int {
-	w := m.width * 2 / 5
-	if w < 34 {
-		w = 34
-	}
-	if w > 56 {
-		w = 56
-	}
-	return w
-}
-
 // ---- view ----
 
 var (
@@ -247,7 +259,9 @@ var (
 	red    = lipgloss.AdaptiveColor{Light: "#cf222e", Dark: "#f85149"}
 	green  = lipgloss.AdaptiveColor{Light: "#1a7f37", Dark: "#3fb950"}
 	yellow = lipgloss.AdaptiveColor{Light: "#9a6700", Dark: "#d29922"}
-	curBg  = lipgloss.AdaptiveColor{Light: "#eaeef2", Dark: "#30363d"}
+	selBg  = lipgloss.AdaptiveColor{Light: "#0969da", Dark: "#58a6ff"}
+	selFg  = lipgloss.AdaptiveColor{Light: "#ffffff", Dark: "#0d1117"}
+	rowBg  = lipgloss.AdaptiveColor{Light: "#eaeef2", Dark: "#21262d"}
 
 	sBold   = lipgloss.NewStyle().Bold(true)
 	sAccent = lipgloss.NewStyle().Foreground(accent)
@@ -256,161 +270,165 @@ var (
 	sRed    = lipgloss.NewStyle().Foreground(red)
 	sGreen  = lipgloss.NewStyle().Foreground(green)
 	sYellow = lipgloss.NewStyle().Foreground(yellow)
-	sCursor = lipgloss.NewStyle().Background(curBg)
-	sBox    = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(faint)
+	sRow    = lipgloss.NewStyle().Background(rowBg)
+	sSel    = lipgloss.NewStyle().Background(selBg).Foreground(selFg).Bold(true).Padding(0, 1)
+	sOpt    = lipgloss.NewStyle().Foreground(subtle).Padding(0, 1)
+	sOptOff = lipgloss.NewStyle().Foreground(faint).Padding(0, 1)
 )
 
 func (m *model) View() string {
+	if m.done {
+		return ""
+	}
 	var b strings.Builder
-	b.WriteString(m.header() + "\n")
-	list := sBox.Width(m.listWidth()).Height(m.height - 5).Render(m.list())
-	diff := sBox.Width(m.diff.Width).Height(m.height - 5).Render(m.diff.View())
-	b.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, list, diff) + "\n")
-	b.WriteString(m.footer())
+	b.WriteString(" " + m.header() + "\n")
+	if m.pending == nil {
+		b.WriteString(m.progress())
+	} else {
+		b.WriteString(m.review())
+	}
 	return b.String()
 }
 
 func (m *model) header() string {
 	r := m.run
-	c := r.Findings.Counts()
 	h := sBold.Render("lgtm") + " ▸ " + sAccent.Render(r.Branch) + sFaint.Render(" → "+r.Base)
 	switch {
 	case m.pending != nil:
 		h += "   " + sYellow.Render(fmt.Sprintf("%d need you", len(m.open)))
 	case r.Phase != "":
-		h += "   " + m.spin.View() + " " + sSubtle.Render(string(r.Phase))
+		h += "   " + sAccent.Render(m.spin.View()) + " " + sSubtle.Render(string(r.Phase))
 	}
-	if r.Round > 0 || r.Findings.Closed {
-		h += sFaint.Render(fmt.Sprintf("   round %d/%d   %d open · %d fixed · %d filed", r.Round, r.MaxRounds, c.Open, c.Fixed, c.Filed))
+	if r.Round > 0 {
+		h += sFaint.Render(fmt.Sprintf("   round %d/%d", r.Round, r.MaxRounds))
 	}
 	h += sFaint.Render(fmt.Sprintf("   ≈$%.2f", r.CostUSD))
-	return lipgloss.NewStyle().MaxWidth(m.width).Render(h)
+	return h
 }
 
-func (m *model) list() string {
-	if m.pending == nil {
-		var b strings.Builder
-		for _, l := range m.run.Lenses {
-			glyph := sFaint.Render("○")
-			switch l.State {
-			case run.Running:
-				glyph = sAccent.Render(m.spin.View())
-			case run.LensDone:
-				glyph = sGreen.Render("✓")
-			case run.LensFailed:
-				glyph = sRed.Render("✗")
-			}
-			fmt.Fprintf(&b, " %s %-13s %s\n", glyph, l.Name, sFaint.Render(l.Model))
-		}
-		if len(m.notes) > 0 {
-			b.WriteString("\n")
-			for _, n := range m.notes {
-				b.WriteString(" " + sSubtle.Render(clip(n, m.listWidth()-3)) + "\n")
-			}
-		}
-		return b.String()
-	}
+func (m *model) progress() string {
 	var b strings.Builder
-	for i, f := range m.open {
-		glyph := sFaint.Render("·")
-		switch m.marks[f.ID] {
-		case ceremony.Fix:
-			glyph = sAccent.Render("f")
-		case ceremony.Accept:
-			glyph = sGreen.Render("a")
-		case ceremony.Dismiss:
-			glyph = sFaint.Render("d")
-		case ceremony.Skip:
-			if _, ok := m.marks[f.ID]; ok {
-				glyph = sSubtle.Render("s")
-			}
+	for _, l := range m.run.Lenses {
+		glyph := sFaint.Render("○")
+		switch l.State {
+		case run.Running:
+			glyph = sAccent.Render(m.spin.View())
+		case run.LensDone:
+			glyph = sGreen.Render("✓")
+		case run.LensFailed:
+			glyph = sRed.Render("✗")
 		}
-		sev := sYellow.Render(string(f.Severity))
-		if f.Severity == finding.Block {
-			sev = sRed.Render(string(f.Severity))
-		}
-		loc := ""
-		if f.Line > 0 {
-			loc = fmt.Sprintf(":%d", f.Line)
-		}
-		line1 := fmt.Sprintf(" %s %-5s %-12s %s", glyph, sev, sSubtle.Render(f.Lens), sFaint.Render(loc))
-		line2 := "   " + clip(f.Rule, m.listWidth()-6)
-		if i == m.cursor {
-			line1 = sCursor.Width(m.listWidth() - 2).Render(line1)
-			line2 = sCursor.Width(m.listWidth() - 2).Render(line2)
-		}
-		b.WriteString(line1 + "\n" + line2 + "\n")
+		fmt.Fprintf(&b, "   %s %-12s %s\n", glyph, l.Name, sFaint.Render(l.Model))
 	}
+	for _, n := range m.notes {
+		b.WriteString("   " + sSubtle.Render(clip(n, m.width-4)) + "\n")
+	}
+	b.WriteString(" " + sFaint.Render("q cancel") + "\n")
 	return b.String()
 }
 
-func (m *model) footer() string {
-	if m.pending == nil {
-		return sSubtle.Render(" q cancel")
-	}
-	keys := []string{"f", "fix", "a", "accept", "d", "dismiss", "s", "skip", "A", "autopilot", "⏎", "submit", "q", "hold"}
-	if !m.canFix {
-		keys = keys[2:]
-	}
+func (m *model) review() string {
 	var b strings.Builder
-	for i := 0; i+1 < len(keys); i += 2 {
-		if i > 0 {
-			b.WriteString(sFaint.Render(" · "))
-		}
-		b.WriteString(sAccent.Render(keys[i]) + " " + sSubtle.Render(keys[i+1]))
-	}
-	return " " + b.String()
-}
+	w := m.width
 
-// renderDiff shows the hunk the current finding points at, anchor line marked.
-func (m *model) renderDiff() {
-	if m.pending == nil || len(m.open) == 0 {
-		m.diff.SetContent("")
-		return
-	}
-	f := m.open[m.cursor]
-	var b strings.Builder
-	b.WriteString(sBold.Render(f.Path))
-	if f.Line > 0 {
-		b.WriteString(sFaint.Render(fmt.Sprintf(":%d", f.Line)))
-	}
-	b.WriteString("  " + sFaint.Render(f.Lens+" · "+f.Rule) + "\n\n")
-	lines, anchorIdx := hunkAround(m.files, f.Path, f.Line, 10)
-	if len(lines) == 0 {
-		b.WriteString(sFaint.Render("  (no hunk — a finding about the change as a whole)") + "\n")
-	}
-	for i, l := range lines {
-		num := "     "
-		if l.NewNum > 0 {
-			num = fmt.Sprintf("%5d", l.NewNum)
+	// the list: one line per finding, focused one highlighted
+	for i, f := range m.open {
+		glyph := sFaint.Render("·")
+		if d, ok := m.marks[f.ID]; ok {
+			glyph = sGreen.Render(actions[actionIndex(d)].key)
 		}
-		var text string
+		sev := sYellow.Render(fmt.Sprintf("%-5s", f.Severity))
+		if f.Severity == finding.Block {
+			sev = sRed.Render(fmt.Sprintf("%-5s", f.Severity))
+		}
+		loc := f.Path
+		if f.Line > 0 {
+			loc += fmt.Sprintf(":%d", f.Line)
+		}
+		line := fmt.Sprintf(" %s %s %-12s %s  %s", glyph, sev, sSubtle.Render(f.Lens), loc, sFaint.Render(f.Rule))
+		if i == m.cursor {
+			line = sRow.Width(w - 1).Render(sAccent.Render("▸") + line[1:])
+		} else {
+			line = " " + line
+		}
+		b.WriteString(line + "\n")
+	}
+	b.WriteString("\n")
+
+	// the focused finding: hunk, body, note
+	f := m.open[m.cursor]
+	lines, anchor := hunkAround(m.files, f.Path, f.Line, 4)
+	for i, l := range lines {
+		num := "    "
+		if l.NewNum > 0 {
+			num = fmt.Sprintf("%4d", l.NewNum)
+		}
+		text := clip(l.Text, w-10)
 		switch l.Kind {
 		case diffparse.Added:
-			text = sGreen.Render("+ " + l.Text)
+			text = sGreen.Render("+ " + text)
 		case diffparse.Removed:
-			text = sRed.Render("- " + l.Text)
+			text = sRed.Render("- " + text)
 		default:
-			text = "  " + l.Text
+			text = "  " + text
 		}
-		row := sFaint.Render(num) + " " + text
-		if i == anchorIdx {
-			row = sYellow.Render("▸") + sCursor.Width(m.diff.Width-1).Render(sFaint.Render(num)+" "+text)
-		} else {
-			row = " " + row
+		mark := " "
+		if i == anchor {
+			mark = sYellow.Render("▸")
 		}
-		b.WriteString(row + "\n")
+		fmt.Fprintf(&b, "  %s%s %s\n", mark, sFaint.Render(num), text)
 	}
-	b.WriteString("\n" + lipgloss.NewStyle().Width(m.diff.Width-2).Render(f.Body) + "\n")
+	if len(lines) > 0 {
+		b.WriteString("\n")
+	}
+	body := lipgloss.NewStyle().Width(w - 4).Render(f.Body)
+	b.WriteString(indent(body, "   ") + "\n")
 	if f.Note != "" {
-		b.WriteString("\n" + sYellow.Render(lipgloss.NewStyle().Width(m.diff.Width-2).Render(f.Note)) + "\n")
+		note := lipgloss.NewStyle().Width(w - 6).Render(f.Note)
+		b.WriteString(indent(sYellow.Render(note), "   ↳ ") + "\n")
 	}
-	m.diff.SetContent(b.String())
-	if anchorIdx > m.diff.Height/2 {
-		m.diff.SetYOffset(anchorIdx - m.diff.Height/2)
-	} else {
-		m.diff.GotoTop()
+	b.WriteString("\n")
+
+	// the action bar
+	if m.allMarked() {
+		b.WriteString("   " + sSel.Render("⏎ submit") + "   " + sFaint.Render("↑↓ change a decision · q hold") + "\n")
+		return b.String()
 	}
+	b.WriteString("  ")
+	for i, a := range actions {
+		switch {
+		case i == m.action:
+			b.WriteString(sSel.Render(a.label))
+		case i == 0 && !m.canFix:
+			b.WriteString(sOptOff.Render(a.label))
+		default:
+			b.WriteString(sOpt.Render(a.label))
+		}
+		b.WriteString(" ")
+	}
+	b.WriteString("   " + sFaint.Render("↑↓ finding · ←→ action · ⏎ apply · A autopilot · q hold") + "\n")
+	return b.String()
+}
+
+func actionIndex(d ceremony.Decision) int {
+	for i, a := range actions {
+		if a.d == d {
+			return i
+		}
+	}
+	return 0
+}
+
+func indent(s, prefix string) string {
+	lines := strings.Split(s, "\n")
+	for i := range lines {
+		if i == 0 {
+			lines[i] = prefix + lines[i]
+		} else {
+			lines[i] = strings.Repeat(" ", len([]rune(prefix))) + lines[i]
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 // hunkAround returns up to ±n lines of the hunk containing newLine in path,
@@ -450,7 +468,6 @@ func clip(s string, w int) string {
 
 // ---- plumbing ----
 
-// chanDecider blocks the ceremony goroutine until the screen answers.
 type chanDecider struct {
 	m     *model
 	files func() []diffparse.FileDiff
@@ -471,8 +488,8 @@ func (d *chanDecider) Decide(ctx context.Context, open []finding.Finding, r *run
 	}
 }
 
-// transcript captures everything the ceremony prints. Lines show in the notes
-// pane while the screen is up and are replayed to stdout afterwards.
+// transcript captures everything the ceremony prints. Lines show in the panel
+// while it's up and are replayed to stdout afterwards.
 type transcript struct {
 	m   *model
 	buf strings.Builder

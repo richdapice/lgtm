@@ -393,7 +393,9 @@ func (c *Ceremony) rounds(ctx context.Context) error {
 		} else {
 			decisions, autopilot, quit := c.decider().Decide(ctx, actionable, c.run)
 			toFix = c.apply(decisions, actionable)
-			if quit {
+			// q parks the run only if something is still open; quitting after
+			// deciding everything just means "go on"
+			if quit && len(c.actionable()) > 0 {
 				c.run.Phase = run.Held
 				return nil
 			}
