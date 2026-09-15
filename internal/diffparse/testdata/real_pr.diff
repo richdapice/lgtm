@@ -1,0 +1,187 @@
+diff --git a/scripts/seed-demo.ts b/scripts/seed-demo.ts
+index 9f90d13..0973794 100644
+--- a/scripts/seed-demo.ts
++++ b/scripts/seed-demo.ts
+@@ -200,6 +200,11 @@ interface StoreDef {
+   input: StoreProfileInput
+   /** PMB numbers covered, in assignment order. */
+   boxes: number[]
++  /** Starting occupancy fraction for the 12-month trend — varies per store
++   *  so the occupancy charts don't all share one curve. */
++  occupancyStartFrac: number
++  /** This store's customer spread (distinct counts/states per store). */
++  specs: Spec[]
+ }
+ 
+ function bankBoxes(banks: { rangeStart: number; rangeEnd: number }[]): number[] {
+@@ -223,8 +228,8 @@ const STORE_DEFS: StoreDef[] = [
+       postmasterPhone: '512-555-0142',
+       form1583AFiledOn: FILED_ON,
+       pmbBanks: [
+-        { label: 'Front wall', rangeStart: 100, rangeEnd: 112 },
+-        { label: 'Back wall', rangeStart: 200, rangeEnd: 212 }
++        { label: 'Front wall', rangeStart: 100, rangeEnd: 128 },
++        { label: 'Back wall', rangeStart: 200, rangeEnd: 206 }
+       ],
+       bcgCredentialsRef: null,
+       idRetentionDays: 14,
+@@ -233,9 +238,15 @@ const STORE_DEFS: StoreDef[] = [
+       uspsStoreLabel: null
+     },
+     boxes: bankBoxes([
+-      { rangeStart: 100, rangeEnd: 112 },
+-      { rangeStart: 200, rangeEnd: 212 }
+-    ])
++      { rangeStart: 100, rangeEnd: 128 },
++      { rangeStart: 200, rangeEnd: 206 }
++    ]),
++    occupancyStartFrac: 0.62,
++    specs: buildSpecs({
++      compliant: 22, business: 3, expiring: 2, expired: 1, crdPending: 2,
++      oneId: 0, drafts: 1, termFresh: 0, termAging: 1, termReassigned: 0,
++      spread: 'established'
++    })
+   },
+   {
+     input: {
+@@ -255,7 +266,13 @@ const STORE_DEFS: StoreDef[] = [
+       pmbReassignmentMinWaitDays: 0,
+       uspsStoreLabel: null
+     },
+-    boxes: bankBoxes([{ rangeStart: 10, rangeEnd: 34 }])
++    boxes: bankBoxes([{ rangeStart: 10, rangeEnd: 34 }]),
++    occupancyStartFrac: 0.12,
++    specs: buildSpecs({
++      compliant: 9, business: 1, expiring: 1, expired: 0, crdPending: 1,
++      oneId: 0, drafts: 1, termFresh: 1, termAging: 0, termReassigned: 0,
++      spread: 'new'
++    })
+   },
+   {
+     input: {
+@@ -269,8 +286,8 @@ const STORE_DEFS: StoreDef[] = [
+       postmasterPhone: '312-555-0117',
+       form1583AFiledOn: FILED_ON,
+       pmbBanks: [
+-        { label: 'Aisle A', rangeStart: 1000, rangeEnd: 1012 },
+-        { label: 'Aisle B', rangeStart: 1500, rangeEnd: 1512 }
++        { label: 'Aisle A', rangeStart: 1000, rangeEnd: 1022 },
++        { label: 'Aisle B', rangeStart: 1500, rangeEnd: 1509 }
+       ],
+       bcgCredentialsRef: null,
+       idRetentionDays: 14,
+@@ -279,9 +296,15 @@ const STORE_DEFS: StoreDef[] = [
+       uspsStoreLabel: null
+     },
+     boxes: bankBoxes([
+-      { rangeStart: 1000, rangeEnd: 1012 },
+-      { rangeStart: 1500, rangeEnd: 1512 }
+-    ])
++      { rangeStart: 1000, rangeEnd: 1022 },
++      { rangeStart: 1500, rangeEnd: 1509 }
++    ]),
++    occupancyStartFrac: 0.40,
++    specs: buildSpecs({
++      compliant: 11, business: 2, expiring: 3, expired: 3, crdPending: 2,
++      oneId: 1, drafts: 2, termFresh: 1, termAging: 1, termReassigned: 1,
++      spread: 'established'
++    })
+   }
+ ]
+ 
+@@ -306,25 +329,58 @@ interface Spec {
+   serviceType: 'business' | 'residential'
+ }
+ 
+-// ~20 specs per store (term_reassigned adds a successor → ~21 customers).
+-function storeSpecs(): Spec[] {
+-  const s: Spec[] = []
+-  const compliantMonths = [12, 11, 10, 9, 7, 5, 3, 1]
+-  for (const m of compliantMonths) s.push({ bucket: 'compliant', monthsAgo: m, serviceType: 'residential' })
+-  s.push({ bucket: 'compliant', monthsAgo: 6, serviceType: 'business' })
+-  s.push({ bucket: 'expiring', monthsAgo: 8, serviceType: 'residential' })
+-  s.push({ bucket: 'expiring', monthsAgo: 2, serviceType: 'business' })
+-  s.push({ bucket: 'expired', monthsAgo: 11, serviceType: 'residential' })
+-  s.push({ bucket: 'expired', monthsAgo: 6, serviceType: 'residential' })
+-  s.push({ bucket: 'crd_pending', monthsAgo: 4, serviceType: 'residential' })
+-  s.push({ bucket: 'compliant', monthsAgo: 3, serviceType: 'residential' })
+-  s.push({ bucket: 'one_id', monthsAgo: 5, serviceType: 'residential' })
+-  s.push({ bucket: 'draft', monthsAgo: 0, serviceType: 'residential' })
+-  s.push({ bucket: 'draft', monthsAgo: 1, serviceType: 'business' })
+-  s.push({ bucket: 'term_fresh', monthsAgo: 10, serviceType: 'residential' })
+-  s.push({ bucket: 'term_aging', monthsAgo: 11, serviceType: 'residential' })
+-  s.push({ bucket: 'term_reassigned', monthsAgo: 9, serviceType: 'residential' })
+-  return s
++interface SpecCounts {
++  compliant: number
++  /** How many of the compliant customers are business-type (PS 1583 §3). */
++  business: number
++  expiring: number
++  expired: number
++  crdPending: number
++  oneId: number
++  drafts: number
++  termFresh: number
++  termAging: number
++  termReassigned: number
++  /** 'established' spreads onboarding across ~12 months; 'new' keeps it recent. */
++  spread: 'established' | 'new'
++}
++
++/**
++ * Build a store's customer spread from per-bucket counts. Onboarding months
++ * are distributed across the store's age so each store's growth curve and
++ * compliance mix differ — no two stores look alike.
++ */
++function buildSpecs(c: SpecCounts): Spec[] {
++  const maxMonth = c.spread === 'new' ? 7 : 12
++  // Distribute n items across [lo, maxMonth] months-ago.
++  const monthAt = (i: number, n: number, lo = 1): number =>
++    n <= 1 ? Math.round((lo + maxMonth) / 2) : lo + Math.round((i / (n - 1)) * (maxMonth - lo))
++
++  const specs: Spec[] = []
++  for (let i = 0; i < c.compliant; i++) {
++    specs.push({
++      bucket: 'compliant',
++      monthsAgo: monthAt(i, c.compliant),
++      serviceType: i < c.business ? 'business' : 'residential'
++    })
++  }
++  for (let i = 0; i < c.expiring; i++)
++    specs.push({ bucket: 'expiring', monthsAgo: monthAt(i, c.expiring, 2), serviceType: 'residential' })
++  for (let i = 0; i < c.expired; i++)
++    specs.push({ bucket: 'expired', monthsAgo: monthAt(i, c.expired, 4), serviceType: 'residential' })
++  for (let i = 0; i < c.crdPending; i++)
++    specs.push({ bucket: 'crd_pending', monthsAgo: monthAt(i, c.crdPending, 1), serviceType: 'residential' })
++  for (let i = 0; i < c.oneId; i++)
++    specs.push({ bucket: 'one_id', monthsAgo: monthAt(i, c.oneId, 3), serviceType: 'residential' })
++  for (let i = 0; i < c.drafts; i++)
++    specs.push({ bucket: 'draft', monthsAgo: i, serviceType: i % 2 ? 'business' : 'residential' })
++  for (let i = 0; i < c.termFresh; i++)
++    specs.push({ bucket: 'term_fresh', monthsAgo: 8 + i, serviceType: 'residential' })
++  for (let i = 0; i < c.termAging; i++)
++    specs.push({ bucket: 'term_aging', monthsAgo: 10 + i, serviceType: 'residential' })
++  for (let i = 0; i < c.termReassigned; i++)
++    specs.push({ bucket: 'term_reassigned', monthsAgo: 9 + i, serviceType: 'residential' })
++  return specs
+ }
+ 
+ // ──────────────────────────────────────────────────────────────────────
+@@ -469,7 +525,7 @@ function seedStore(db: Db, def: StoreDef): { storeId: string; totals: StoreTotal
+   const ctx: BuildCtx = { db, storeId: store.id, storeInput: def.input, nextBox }
+   const totals: StoreTotals = { active: 0, drafts: 0, terminated: 0 }
+ 
+-  for (const spec of storeSpecs()) {
++  for (const spec of def.specs) {
+     switch (spec.bucket) {
+       case 'compliant': {
+         buildActive(ctx, spec, true)
+@@ -626,7 +682,7 @@ function seedStore(db: Db, def: StoreDef): { storeId: string; totals: StoreTotal
+       .prepare(`SELECT COUNT(*) AS c FROM pmb_inventory WHERE store_id = ? AND status = 'assigned'`)
+       .get(store.id) as { c: number }
+   ).c
+-  const startOccupied = Math.max(2, Math.round(assignedNow * 0.35))
++  const startOccupied = Math.min(assignedNow, Math.max(1, Math.round(capacity * def.occupancyStartFrac)))
+   for (let m = 11; m >= 0; m--) {
+     const t = (11 - m) / 11
+     // ease-out ramp + tiny deterministic wiggle so the line isn't a ruler
