@@ -39,14 +39,11 @@ func Run(ctx context.Context, o ceremony.Options) (transcript string, err error)
 	}
 	m.files = c.Files()
 	m.canFix = c.CanFix()
+	m.decider.files = c.Files
 
 	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithContext(ctx))
 	m.program = p
-	go func() {
-		err := c.Run(ctx)
-		m.files = c.Files()
-		p.Send(doneMsg{err})
-	}()
+	go func() { p.Send(doneMsg{c.Run(ctx)}) }()
 	if _, perr := p.Run(); perr != nil && ctx.Err() == nil {
 		return m.out.String(), perr
 	}
@@ -62,6 +59,7 @@ type noteMsg struct{ line string }
 // decideMsg carries the ceremony's question; the model answers on reply.
 type decideMsg struct {
 	open  []finding.Finding
+	files []diffparse.FileDiff // the diff as of this round; fix rounds rewrite it
 	reply chan decideReply
 }
 type decideReply struct {
@@ -134,6 +132,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case decideMsg:
 		m.pending = &msg
 		m.open = msg.open
+		if msg.files != nil {
+			m.files = msg.files
+		}
 		m.marks = map[string]ceremony.Decision{}
 		m.cursor = 0
 		m.renderDiff()
@@ -447,11 +448,18 @@ func clip(s string, w int) string {
 // ---- plumbing ----
 
 // chanDecider blocks the ceremony goroutine until the screen answers.
-type chanDecider struct{ m *model }
+type chanDecider struct {
+	m     *model
+	files func() []diffparse.FileDiff
+}
 
 func (d *chanDecider) Decide(ctx context.Context, open []finding.Finding, r *run.Run) (map[string]ceremony.Decision, bool, bool) {
 	reply := make(chan decideReply, 1)
-	d.m.send(decideMsg{open: open, reply: reply})
+	var files []diffparse.FileDiff
+	if d.files != nil {
+		files = d.files()
+	}
+	d.m.send(decideMsg{open: open, files: files, reply: reply})
 	select {
 	case <-ctx.Done():
 		return nil, false, true
