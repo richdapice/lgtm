@@ -224,6 +224,8 @@ func prepare(ctx context.Context, o Options) (*Ceremony, error) {
 		if o.Auto {
 			c.run.Mode = "auto"
 		}
+		// Held is where the run *was*; rounds decide where it goes next
+		c.run.Phase = run.Fix
 		c.log("resuming held run (%d open)", c.run.Findings.Counts().Open)
 		return c, nil
 	}
