@@ -276,7 +276,7 @@ func (c *Ceremony) discover(ctx context.Context) error {
 		return nil // resumed
 	}
 	c.run.Phase = run.Discover
-	c.save()
+	c.step("review", fmt.Sprintf("%d lenses", len(c.repo.EnabledLenses())))
 	lenses := c.repo.EnabledLenses()
 
 	type result struct {
@@ -427,6 +427,7 @@ func (c *Ceremony) rounds(ctx context.Context) error {
 				break
 			}
 		} else {
+			c.step("decide", fmt.Sprintf("%d waiting on you", len(actionable)))
 			decisions, autopilot, quit := c.decider().Decide(ctx, actionable, c.run)
 			toFix = c.apply(decisions, actionable)
 			// q parks the run only if something is still open; quitting after
@@ -450,7 +451,7 @@ func (c *Ceremony) rounds(ctx context.Context) error {
 
 		c.run.Round = round
 		c.run.Phase = run.Fix
-		c.save()
+		c.step("fix", fmt.Sprintf("agent working on %d finding(s)", len(toFix)))
 		fixRes, err := c.fixer.Ask(ctx, lens.BuildFixPrompt(toFix, c.conventions, c.run.Mode == "auto"), nil)
 		c.addCost(fixRes.CostUSD)
 		c.logCall("fix", fixRes)
@@ -475,9 +476,11 @@ func (c *Ceremony) rounds(ctx context.Context) error {
 
 		// nothing lands unvalidated: the repo's own checks run on what the
 		// fixer touched, and a failing check reverts the round
+		c.step("check", fmt.Sprintf("%d file(s) touched", len(touched)))
 		checks := project.Run(ctx, c.root, project.Plan(c.repo, touched))
 		ok, _ := project.AllOK(checks)
 		if !ok {
+			c.run.Rounds = append(c.run.Rounds, run.RoundSummary{Reverted: true, Open: len(c.actionable())})
 			c.println("round %d: checks failed after fix; reverting", round)
 			c.println("%s", checksText(checks))
 			if err := revert(ctx, c.root); err != nil {
@@ -494,7 +497,7 @@ func (c *Ceremony) rounds(ctx context.Context) error {
 		}
 
 		c.run.Phase = run.Verify
-		c.save()
+		c.step("verify", fmt.Sprintf("%d to confirm", len(c.run.Findings.Open())))
 		if err := c.refreshDiff(ctx); err != nil {
 			return err
 		}
@@ -529,6 +532,7 @@ func (c *Ceremony) rounds(ctx context.Context) error {
 		for _, f := range newFs {
 			c.run.Findings.File(f, round)
 		}
+		c.run.Rounds = append(c.run.Rounds, run.RoundSummary{Fixed: fixed, Filed: len(newFs), Open: c.run.Findings.Counts().Open})
 		c.log("round %d: %d fixed, %d filed, %d still open", round, fixed, len(newFs), c.run.Findings.Counts().Open)
 		c.println("round %d/%d: %d fixed · %d filed · %d open", round, c.run.MaxRounds, fixed, len(newFs), c.run.Findings.Counts().Open)
 		c.save()
@@ -600,7 +604,7 @@ func (c *Ceremony) commitRound(ctx context.Context, touched []string, fixed []fi
 
 func (c *Ceremony) openPR(ctx context.Context) error {
 	c.run.Phase = run.PR
-	c.save()
+	c.step("push", "origin/"+c.branch)
 	if err := gitx.Push(ctx, c.root, "origin", c.branch); err != nil {
 		return err
 	}
@@ -611,6 +615,7 @@ func (c *Ceremony) openPR(ctx context.Context) error {
 		c.println("PR already open: %s", url)
 		return nil
 	}
+	c.step("pr", "writing the body")
 	// literal check output for the Tests section — the body must not claim
 	// anything this run did not see
 	checks := project.Run(ctx, c.root, project.Plan(c.repo, c.changed))
@@ -666,7 +671,7 @@ func (c *Ceremony) watchCI(ctx context.Context) {
 	}
 	c.run.Phase = run.CI
 	c.run.CI = &run.CIStatus{Since: time.Now().UTC()}
-	c.save()
+	c.step("ci", "watching checks")
 	deadline := time.Now().Add(30 * time.Minute)
 	started := time.Now()
 	for time.Now().Before(deadline) {
@@ -804,6 +809,14 @@ func (c *Ceremony) addCost(usd float64) {
 	c.mu.Lock()
 	c.run.CostUSD += usd
 	c.mu.Unlock()
+}
+
+// step records the gate the run is at, for the track.
+func (c *Ceremony) step(name, note string) {
+	c.mu.Lock()
+	c.run.Step, c.run.StepNote = name, note
+	c.mu.Unlock()
+	c.save()
 }
 
 func (c *Ceremony) log(format string, a ...any) { c.o.Log.Printf(format, a...) }

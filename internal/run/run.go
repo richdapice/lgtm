@@ -64,6 +64,16 @@ func (l Lens) Elapsed(now time.Time) time.Duration {
 	return now.Sub(l.StartedAt)
 }
 
+type RoundSummary struct {
+	Fixed    int  `json:"fixed"`
+	Filed    int  `json:"filed"`
+	Open     int  `json:"open"`
+	Reverted bool `json:"reverted,omitempty"`
+}
+
+// Gates is the track, in order. The decide→fix→check→verify stretch repeats.
+var Gates = []string{"review", "decide", "fix", "check", "verify", "push", "pr", "ci"}
+
 type PRInfo struct {
 	Number int    `json:"number"`
 	URL    string `json:"url"`
@@ -95,6 +105,13 @@ type Run struct {
 	CI        *CIStatus   `json:"ci,omitempty"`
 	Error     string      `json:"error,omitempty"`
 	PID       int         `json:"pid"` // so a stale file from a dead process is detectable
+	// Step is the gate the run is at right now: review, decide, fix, check,
+	// verify, push, pr, ci. Phase is coarser; this is what the track draws.
+	Step string `json:"step,omitempty"`
+	// StepNote is one line about the current gate ("agent editing 2 files").
+	StepNote string `json:"step_note,omitempty"`
+	// Rounds is one summary per finished decide→fix→check→verify cycle.
+	Rounds []RoundSummary `json:"rounds,omitempty"`
 	// Decisions recorded by `lgtm decide` while held, consumed by `lgtm continue`.
 	Decisions map[string]string `json:"decisions,omitempty"`
 }

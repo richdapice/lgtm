@@ -312,25 +312,90 @@ func (m *model) header() string {
 	return h
 }
 
+// progress is the live view between decisions: the gates, where the run is,
+// and the rounds it has been through. This is what the run looks like from
+// the outside.
 func (m *model) progress() string {
 	var b strings.Builder
-	for _, l := range m.run.Lenses {
-		glyph := sFaint.Render("○")
-		switch l.State {
-		case run.Running:
-			glyph = sAccent.Render(m.spin.View())
-		case run.LensDone:
-			glyph = sGreen.Render("✓")
-		case run.LensFailed:
-			glyph = sRed.Render("✗")
+	r := m.run
+	b.WriteString("\n " + sSubtle.Render("GATES") + "\n")
+	reached := false
+	for _, g := range run.Gates {
+		mark, name, note := sFaint.Render("○"), sFaint.Render(pad(g, 8)), ""
+		switch {
+		case g == r.Step && !reached:
+			reached = true
+			mark, name = sAccent.Render(m.spin.View()), sAccent.Render(pad(g, 8))
+			note = sSubtle.Render(r.StepNote)
+		case !reached:
+			mark, name = sGreen.Render("✓"), pad(g, 8)
+			note = sFaint.Render(gateSummary(g, r))
 		}
-		fmt.Fprintf(&b, "   %s %-12s %s\n", glyph, l.Name, sFaint.Render(l.Model))
+		fmt.Fprintf(&b, "   %s %s  %s\n", mark, name, note)
+	}
+	if r.MaxRounds > 0 && (r.Round > 0 || len(r.Rounds) > 0) {
+		b.WriteString("\n " + sSubtle.Render("ROUNDS") + "  ")
+		for i := 0; i < r.MaxRounds; i++ {
+			if i < len(r.Rounds) {
+				b.WriteString(sGreen.Render("● "))
+			} else if i == len(r.Rounds) && r.Round > len(r.Rounds) {
+				b.WriteString(sAccent.Render("◐ "))
+			} else {
+				b.WriteString(sFaint.Render("○ "))
+			}
+		}
+		for i, rs := range r.Rounds {
+			if rs.Reverted {
+				fmt.Fprintf(&b, "   %s", sFaint.Render(fmt.Sprintf("round %d: fix reverted, checks failed", i+1)))
+			} else {
+				fmt.Fprintf(&b, "   %s", sFaint.Render(fmt.Sprintf("round %d: %d fixed · %d filed · %d open", i+1, rs.Fixed, rs.Filed, rs.Open)))
+			}
+		}
+		b.WriteString("\n")
 	}
 	for _, n := range m.notes {
 		b.WriteString("   " + sSubtle.Render(clip(n, m.width-4)) + "\n")
 	}
-	b.WriteString(" " + sFaint.Render("q cancel") + "\n")
+	b.WriteString("\n " + sFaint.Render("q cancel") + "\n")
 	return b.String()
+}
+
+// gateSummary is the one-line result of a gate already passed.
+func gateSummary(g string, r run.Run) string {
+	c := r.Findings.Counts()
+	switch g {
+	case "review":
+		n := len(r.Lenses)
+		if n == 1 {
+			n = 4
+		}
+		return fmt.Sprintf("%d lenses · %d found", n, r.Findings.Discovered())
+	case "decide":
+		return fmt.Sprintf("%d fixed · %d accepted · %d dismissed", c.Fixed, c.Accepted, c.Dismissed)
+	case "fix", "check", "verify":
+		if len(r.Rounds) > 0 {
+			last := r.Rounds[len(r.Rounds)-1]
+			return fmt.Sprintf("round %d", len(r.Rounds)) + map[bool]string{true: " · reverted", false: fmt.Sprintf(" · %d confirmed", last.Fixed)}[last.Reverted]
+		}
+	case "push":
+		return "origin/" + r.Branch
+	case "pr":
+		if r.PR != nil {
+			return fmt.Sprintf("#%d", r.PR.Number)
+		}
+	case "ci":
+		if r.CI != nil {
+			return fmt.Sprintf("%d/%d green", r.CI.Passed, r.CI.Total)
+		}
+	}
+	return ""
+}
+
+func pad(s string, w int) string {
+	for len([]rune(s)) < w {
+		s += " "
+	}
+	return s
 }
 
 func decisionWord(d ceremony.Decision, decided bool) string {

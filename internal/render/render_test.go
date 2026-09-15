@@ -1,6 +1,7 @@
 package render
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -153,5 +154,18 @@ func TestWidthStripsOSC8(t *testing.T) {
 	s := "\033]8;;https://x\033\\#119\033]8;;\033\\ ok"
 	if w := width(s); w != 7 {
 		t.Fatalf("width = %d", w)
+	}
+}
+
+func TestGateTrackRow(t *testing.T) {
+	r := discoverRun()
+	r.Phase, r.Step, r.Round = run.Verify, "verify", 2
+	r.Findings.Close()
+	out := Render(Input{Runs: []*run.Run{r}, Now: now}, Style{Cols: 110})
+	if !strings.Contains(out, "gates ✓ review ─ ✓ decide ─ ✓ fix ─ ✓ check ─ ∴ verify ─ ○ push ─ ○ pr ─ ○ ci") {
+		t.Fatalf("no gate track:\n%s", out)
+	}
+	if os.Getenv("SHOW") != "" {
+		fmt.Println(out)
 	}
 }

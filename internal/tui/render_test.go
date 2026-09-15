@@ -64,3 +64,32 @@ func contains(s, sub string) bool {
 	}
 	return false
 }
+
+// TestProgressFrame is the between-decisions view: gates and rounds.
+func TestProgressFrame(t *testing.T) {
+	lipgloss.SetColorProfile(termenv.Ascii)
+	m := newModel(context.Background(), func() {})
+	m.width = 96
+	var set finding.Set
+	for i := 0; i < 7; i++ {
+		set.Add(finding.Finding{Path: "a", Anchor: fmt.Sprint(i), Rule: "r", Severity: finding.Ask})
+	}
+	set.Close()
+	for i := 0; i < 3; i++ {
+		set.Transition(set.Findings[i].ID, finding.Fixed, 1)
+	}
+	set.Transition(set.Findings[3].ID, finding.Accepted, 1)
+	m.run = run.Run{Branch: "worktree-sync-throttle", Base: "main", CostUSD: 0.62, Phase: run.Fix,
+		Step: "fix", StepNote: "agent working on 3 finding(s)", Round: 2, MaxRounds: 3,
+		Lenses: []run.Lens{{Name: "review"}}, Findings: set,
+		Rounds: []run.RoundSummary{{Fixed: 3, Filed: 1, Open: 3}}}
+	out := m.View()
+	if os.Getenv("SHOW") != "" {
+		fmt.Println(out)
+	}
+	for _, want := range []string{"GATES", "✓ review", "✓ decide", "fix       agent working", "○ check", "ROUNDS", "round 1: 3 fixed"} {
+		if !contains(out, want) {
+			t.Errorf("frame missing %q\n%s", want, out)
+		}
+	}
+}

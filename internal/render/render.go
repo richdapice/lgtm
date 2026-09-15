@@ -229,7 +229,8 @@ func single(r *run.Run, now time.Time, st Style, plan *PlanUsage) string {
 	}
 	rows = append(rows, row(st, "", head, "", "lgtm"))
 
-	showLenses := r.Phase == run.Discover || r.Phase == run.Fix || r.Phase == run.Verify || r.Phase == run.Held
+	// lenses while reviewing; after that the gate track tells the story
+	showLenses := r.Phase == run.Discover
 	if showLenses && len(r.Lenses) > 0 {
 		for i, l := range r.Lenses {
 			stem := "│"
@@ -244,6 +245,22 @@ func single(r *run.Run, now time.Time, st Style, plan *PlanUsage) string {
 			}
 			rows = append(rows, row(st, "", lensRow(l, now, stem, st), "", ""))
 		}
+	}
+	if r.Step != "" && r.Step != "review" && r.Phase != run.Done {
+		var parts []string
+		reached := false
+		for _, g := range run.Gates {
+			switch {
+			case g == r.Step && !reached:
+				reached = true
+				parts = append(parts, st.c(accent, "∴ "+g))
+			case !reached:
+				parts = append(parts, st.c(good, "✓ ")+g)
+			default:
+				parts = append(parts, st.c(dim, "○ "+g))
+			}
+		}
+		rows = append(rows, row(st, "gates", strings.Join(parts, st.c(dim, " ─ ")), "", ""))
 	}
 	if r.Round > 0 || r.Findings.Closed {
 		c := r.Findings.Counts()

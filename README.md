@@ -30,6 +30,28 @@ $ lgtm
    ↑↓ pick a finding · ←→ pick an action · Enter to apply · A autopilot · q quit for now
 ```
 
+And between your decisions, the run itself:
+
+```
+ lgtm · worktree-sync-throttle → main      ⠋ fix · round 2 of 3      ≈$0.62
+
+ GATES
+   ✓ review    4 lenses · 7 found
+   ✓ decide    3 fixed · 1 accepted · 0 dismissed
+   ⠋ fix       agent working on 3 finding(s)
+   ○ check
+   ○ verify
+   ○ push
+   ○ pr
+   ○ ci
+
+ ROUNDS  ● ◐ ○    round 1: 3 fixed · 1 filed · 3 open
+
+ q cancel
+```
+
+Eight gates. The middle four (decide, fix, check, verify) cycle: fixes go in, your checks run on them, each fix is confirmed against the new diff, and anything still open comes back to you for the next round. The set of findings only ever gets shorter, so it always finishes.
+
 ## Why
 
 You already run the tests before you push. What you usually don't have is someone who read the change. Reviewers are busy, and the bugs that get through tend to be the kind a second pair of eyes catches in thirty seconds. `lgtm` is that second pair of eyes, on your machine, before anyone else has to spend theirs.
@@ -135,13 +157,10 @@ lgtm continue --auto -b my-branch       # …and autopilot the rest
   lgtm ▸ worktree-sync-throttle → main   manual   1m12s   ≈$0.41   5h 37% ↺ 2h23m · 7d 61% ↺ 3d04h
       ─ review        ████████▊░░░░     –   opus      1m12s
 
-── lenses in parallel (fanout = "parallel")
-  lgtm ▸ worktree-sync-throttle → main   manual   2m14s   ≈$0.09
-      ╭ correctness  ─────────────  ✓  7   opus      42s
-      │ conventions  ████████▊░░░░     –   haiku     12s
-      │ security     ─────────────  ✓  2   opus      38s
-      ╰ tests        ██████▎░░░░░░     –   sonnet  1m04s
- loop ● ● ○  round 2/3      4 open · 6 fixed · 2 filed
+── mid-run, at the verify gate (lenses shown here because fanout = "parallel")
+  lgtm ▸ worktree-r2-incremental-cache → main   manual   2m14s   ≈$0.09
+gates ✓ review ─ ✓ decide ─ ✓ fix ─ ✓ check ─ ∴ verify ─ ○ push ─ ○ pr ─ ○ ci
+ loop ● ● ○  round 2/3      0 open · 0 fixed · 0 filed
 
 ── waiting on you
   lgtm ▸ worktree-sync-throttle → main   2 need you   3m16s   ≈$0.62
@@ -157,7 +176,7 @@ lgtm continue --auto -b my-branch       # …and autopilot the rest
       20 runs  ▂▃▂▅▂▂▇▃▂▂▄▂▃▂▂▃▅▂▂▃  median 2m38s · 3 held · streak 4
 ```
 
-The bright bar is whatever is running now; finished lenses go quiet. Idle shows your last twenty runs as a sparkline and how many in a row shipped without needing you. `#126` is a link. `5h 37% ↺ 2h23m` is your subscription's 5-hour window, how much of it is used and when it resets, and `7d` is the weekly one. They show whenever Claude Code passes them along.
+While it reviews, the bright bar is whichever lens is running. After that the gate track takes over: ✓ passed, ∴ now, ○ ahead. Idle shows your last twenty runs as a sparkline and how many in a row shipped without needing you. `#126` is a link. `5h 37% ↺ 2h23m` is your subscription's 5-hour window, how much of it is used and when it resets, and `7d` is the weekly one. They show whenever Claude Code passes them along.
 
 ## Configuration
 
