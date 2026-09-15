@@ -98,7 +98,8 @@ type envelope struct {
 	TotalCostUSD     float64         `json:"total_cost_usd"`
 	NumTurns         int             `json:"num_turns"`
 	ModelUsage       map[string]struct {
-		CanonicalModel string `json:"canonicalModel"`
+		CanonicalModel string  `json:"canonicalModel"`
+		CostUSD        float64 `json:"costUSD"`
 	} `json:"modelUsage"`
 }
 
@@ -177,9 +178,13 @@ func (a Adapter) parseNative(res *Result, stdout []byte, stderr string, exit int
 	}
 	res.CostUSD = env.TotalCostUSD
 	res.NumTurns = env.NumTurns
+	// modelUsage is a map and Claude Code runs side tasks on Haiku; report
+	// the model that did the work, not whichever key ranged first
+	var top float64
 	for _, u := range env.ModelUsage {
-		res.Model = u.CanonicalModel
-		break
+		if u.CostUSD >= top {
+			top, res.Model = u.CostUSD, u.CanonicalModel
+		}
 	}
 	if env.IsError {
 		e := &Error{Agent: a.Name, Kind: env.Subtype, ExitCode: exit, Stderr: strings.TrimSpace(stderr)}

@@ -668,6 +668,7 @@ func (c *Ceremony) watchCI(ctx context.Context) {
 	c.run.CI = &run.CIStatus{Since: time.Now().UTC()}
 	c.save()
 	deadline := time.Now().Add(30 * time.Minute)
+	started := time.Now()
 	for time.Now().Before(deadline) {
 		pass, fail, pending, err := c.gh.Checks(ctx, owner, repo, c.run.PR.Number)
 		if err != nil {
@@ -677,7 +678,11 @@ func (c *Ceremony) watchCI(ctx context.Context) {
 		c.run.CI.Passed, c.run.CI.Failed, c.run.CI.Pending = pass, fail, pending
 		c.run.CI.Total = pass + fail + pending
 		c.save()
-		if pending == 0 && c.run.CI.Total > 0 {
+		// the check rollup fills in lazily: an external status (a Pages
+		// deploy, say) can be the only check for the first seconds while the
+		// Actions jobs are still registering. Don't call a verdict early.
+		settled := time.Since(started) > 90*time.Second
+		if pending == 0 && c.run.CI.Total > 0 && settled {
 			if fail > 0 {
 				c.println("ci: %d check(s) failed — %s", fail, c.run.PR.URL)
 			} else {

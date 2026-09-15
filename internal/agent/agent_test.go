@@ -40,7 +40,7 @@ var schema = json.RawMessage(`{"type":"object","properties":{"findings":{"type":
 
 func TestNativeHappyPath(t *testing.T) {
 	env := `{"is_error":false,"subtype":"success","total_cost_usd":0.043,"num_turns":4,
-	  "modelUsage":{"claude-haiku-4-5-20251001":{"canonicalModel":"claude-haiku-4-5"}},
+	  "modelUsage":{"claude-haiku-4-5-20251001":{"canonicalModel":"claude-haiku-4-5","costUSD":0.043},"claude-opus-5":{"canonicalModel":"claude-opus-5","costUSD":0.9}},
 	  "result":"{\"findings\":[]}","structured_output":{"findings":[{"file":"x.ts"}]}}`
 	a := Adapter{Name: "fake", Command: fakeCLI(t, env, 0), Cap: SchemaNative}
 	res, err := a.Ask(context.Background(), "p", schema)
@@ -51,7 +51,7 @@ func TestNativeHappyPath(t *testing.T) {
 	if err := json.Unmarshal(res.Output, &out); err != nil || len(out.Findings) != 1 || out.Findings[0].File != "x.ts" {
 		t.Fatalf("output = %s (%v)", res.Output, err)
 	}
-	if res.CostUSD != 0.043 || res.Model != "claude-haiku-4-5" || res.NumTurns != 4 {
+	if res.CostUSD != 0.043 || res.Model != "claude-opus-5" || res.NumTurns != 4 {
 		t.Fatalf("meta = %+v", res)
 	}
 }
