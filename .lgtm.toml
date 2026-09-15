@@ -1,0 +1,19 @@
+# lgtm — review this repo before a PR opens.
+#
+# [[project]] routes changed files to the commands that check them; the first
+# whose path prefixes a file wins, so nested projects go before ".". {files}
+# expands to the changed paths relative to that project. An empty command is
+# skipped and reported as skipped — never counted as a pass.
+#
+# [lens.<name>] model = "haiku" | "sonnet" | "opus" overrides the agent default.
+
+[lgtm]
+  mode = "manual"
+  max_fix_rounds = 3
+  fanout = "single"
+  max_budget_usd = 0.0
+
+[[project]]
+  path = "."
+  test = "go test ./..."
+  lint = "go vet ./..."

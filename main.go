@@ -27,6 +27,7 @@ import (
 	"github.com/richdapice/lgtm/internal/render"
 	"github.com/richdapice/lgtm/internal/run"
 	"github.com/richdapice/lgtm/internal/setup"
+	"github.com/richdapice/lgtm/internal/skill"
 	"github.com/richdapice/lgtm/internal/tui"
 	"golang.org/x/term"
 )
@@ -75,6 +76,10 @@ func main() {
 		err = cmdDoctor(ctx)
 	case "init":
 		err = cmdInit(ctx, args)
+	case "decide":
+		err = cmdDecide(ctx, args)
+	case "continue":
+		err = cmdContinue(ctx, args, logger)
 	case "version":
 		fmt.Println("lgtm", version)
 	case "help", "-h", "--help":
@@ -96,10 +101,12 @@ func usage() {
   lgtm [--auto] [--intent TEXT] [--draft] [--no-pr] [--plain]
                                                       review the current branch, then open the PR
   lgtm statusline                                     render the status bar (reads Claude Code JSON on stdin)
-  lgtm status [--json]                                current run for this branch
+  lgtm decide ID fix|accept|dismiss|skip [-b BRANCH]  record a decision on a held run (no terminal needed)
+  lgtm continue [--auto] [--no-pr] [-b BRANCH]        apply recorded decisions and carry on
+  lgtm status [--json] [-b BRANCH]                    current run for this branch
   lgtm findings [--json]                              the finding set
   lgtm dismiss ID [-r REASON]                         never see this finding again (commits to .lgtm/dismissed.toml)
-  lgtm init [-y] [--statusline]                       detect projects, write .lgtm.toml, optionally wire the status bar
+  lgtm init [-y] [--statusline] [--skill]             detect projects, write .lgtm.toml; wire the status bar and the /lgtm skill
   lgtm doctor                                         check each configured agent answers
   lgtm version
 
@@ -111,12 +118,16 @@ Log: .git/lgtm/lgtm.log (or LGTM_DEBUG=/path)   Config: LGTM_CONFIG=/path/to/con
 func cmdRun(ctx context.Context, args []string, logger *log.Logger) error {
 	fs := flag.NewFlagSet("lgtm", flag.ExitOnError)
 	auto := fs.Bool("auto", false, "fix every finding without asking, up to max_fix_rounds")
+	branch := fs.String("b", "", "branch (any worktree of this repo)")
 	intent := fs.String("intent", "", "what the change is for (default: the branch's commit messages)")
 	draft := fs.Bool("draft", false, "open the PR as a draft")
 	noPR := fs.Bool("no-pr", false, "review only; do not push or open a PR")
 	plain := fs.Bool("plain", false, "line prompts instead of the screen (default when stdout is not a terminal)")
 	fs.Parse(args)
-	cwd, _ := os.Getwd()
+	cwd, err := dirFor(ctx, *branch)
+	if err != nil {
+		return err
+	}
 	opts := ceremony.Options{Dir: cwd, Auto: *auto, Intent: *intent, Draft: *draft, NoPR: *noPR, Log: logger}
 	if *plain || !term.IsTerminal(int(os.Stdout.Fd())) || !term.IsTerminal(int(os.Stdin.Fd())) {
 		return ceremony.Run(ctx, opts)
@@ -190,15 +201,28 @@ func cmdStatusline(args []string) error {
 	return nil
 }
 
-func loadCurrent(ctx context.Context) (*run.Run, string, error) {
+// dirFor is cwd, or the worktree that has -b BRANCH checked out.
+func dirFor(ctx context.Context, branch string) (string, error) {
 	cwd, _ := os.Getwd()
+	if branch == "" {
+		return cwd, nil
+	}
+	return gitx.WorktreeFor(ctx, cwd, branch)
+}
+
+func loadCurrent(ctx context.Context, branch string) (*run.Run, string, error) {
+	cwd, err := dirFor(ctx, branch)
+	if err != nil {
+		return nil, "", err
+	}
 	common, err := gitx.CommonDir(ctx, cwd)
 	if err != nil {
 		return nil, "", err
 	}
-	branch, err := gitx.Branch(ctx, cwd)
-	if err != nil {
-		return nil, "", err
+	if branch == "" {
+		if branch, err = gitx.Branch(ctx, cwd); err != nil {
+			return nil, "", err
+		}
 	}
 	r, err := run.Load(common, branch)
 	if err != nil {
@@ -210,8 +234,9 @@ func loadCurrent(ctx context.Context) (*run.Run, string, error) {
 func cmdStatus(args []string) error {
 	fs := flag.NewFlagSet("status", flag.ExitOnError)
 	asJSON := fs.Bool("json", false, "machine-readable")
+	branch := fs.String("b", "", "branch (any worktree of this repo)")
 	fs.Parse(args)
-	r, _, err := loadCurrent(context.Background())
+	r, _, err := loadCurrent(context.Background(), *branch)
 	if err != nil {
 		return err
 	}
@@ -239,8 +264,9 @@ func cmdStatus(args []string) error {
 func cmdFindings(args []string) error {
 	fs := flag.NewFlagSet("findings", flag.ExitOnError)
 	asJSON := fs.Bool("json", false, "machine-readable")
+	branch := fs.String("b", "", "branch (any worktree of this repo)")
 	fs.Parse(args)
-	r, _, err := loadCurrent(context.Background())
+	r, _, err := loadCurrent(context.Background(), *branch)
 	if err != nil {
 		return err
 	}
@@ -265,19 +291,23 @@ func cmdFindings(args []string) error {
 func cmdDismiss(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("dismiss", flag.ExitOnError)
 	reason := fs.String("r", "", "why")
+	branch := fs.String("b", "", "branch (any worktree of this repo)")
 	fs.Parse(args)
 	if fs.NArg() != 1 {
-		return errors.New("usage: gate dismiss ID [-r REASON]")
+		return errors.New("usage: lgtm dismiss ID [-r REASON] [-b BRANCH]")
 	}
-	r, _, err := loadCurrent(ctx)
+	r, _, err := loadCurrent(ctx, *branch)
 	if err != nil {
 		return err
 	}
-	f := r.Findings.ByID(fs.Arg(0))
+	f := findByPrefix(r, fs.Arg(0))
 	if f == nil {
 		return fmt.Errorf("no finding %s in the current run", fs.Arg(0))
 	}
-	cwd, _ := os.Getwd()
+	cwd, err := dirFor(ctx, *branch)
+	if err != nil {
+		return err
+	}
 	root, err := gitx.Root(ctx, cwd)
 	if err != nil {
 		return err
@@ -298,6 +328,7 @@ func cmdInit(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("init", flag.ExitOnError)
 	yes := fs.Bool("y", false, "accept detected defaults without asking")
 	bar := fs.Bool("statusline", false, "add lgtm to Claude Code's status bar (~/.claude/settings.json)")
+	sk := fs.Bool("skill", false, "install the /lgtm skill for Claude Code (~/.claude/skills/lgtm)")
 	fs.Parse(args)
 	cwd, _ := os.Getwd()
 	root, err := gitx.Root(ctx, cwd)
@@ -325,8 +356,93 @@ func cmdInit(ctx context.Context, args []string) error {
 			fmt.Println("status bar: already wired")
 		}
 	}
+	if *sk {
+		path, changed, err := skill.Install()
+		if err != nil {
+			return err
+		}
+		if changed {
+			fmt.Println("skill: wrote", path)
+		} else {
+			fmt.Println("skill: up to date")
+		}
+	}
 	fmt.Println("next: lgtm doctor")
 	return nil
+}
+
+func findByPrefix(r *run.Run, id string) *finding.Finding {
+	var hit *finding.Finding
+	for i := range r.Findings.Findings {
+		if strings.HasPrefix(r.Findings.Findings[i].ID, id) {
+			if hit != nil {
+				return nil // ambiguous
+			}
+			hit = &r.Findings.Findings[i]
+		}
+	}
+	return hit
+}
+
+// cmdDecide records a decision on a held run without a terminal. The run
+// file is the mailbox; `continue` reads it.
+func cmdDecide(ctx context.Context, args []string) error {
+	fs := flag.NewFlagSet("decide", flag.ExitOnError)
+	branch := fs.String("b", "", "branch (any worktree of this repo)")
+	fs.Parse(args)
+	if fs.NArg() != 2 {
+		return errors.New("usage: lgtm decide ID fix|accept|dismiss|skip [-b BRANCH]")
+	}
+	if _, ok := ceremony.ParseDecision(fs.Arg(1)); !ok {
+		return fmt.Errorf("decision must be fix, accept, dismiss, or skip; got %q", fs.Arg(1))
+	}
+	r, common, err := loadCurrent(ctx, *branch)
+	if err != nil {
+		return err
+	}
+	if r.Phase != run.Held {
+		return fmt.Errorf("run is %s, not waiting on a decision", r.Phase)
+	}
+	f := findByPrefix(r, fs.Arg(0))
+	if f == nil {
+		return fmt.Errorf("no single finding matches %q — see lgtm findings", fs.Arg(0))
+	}
+	if f.State != finding.Open || f.Severity == finding.File {
+		return fmt.Errorf("%s is %s and not waiting on you", f.ID, f.State)
+	}
+	if r.Decisions == nil {
+		r.Decisions = map[string]string{}
+	}
+	r.Decisions[f.ID] = fs.Arg(1)
+	if err := r.Save(common); err != nil {
+		return err
+	}
+	fmt.Printf("%s → %s  (%d recorded, %d still open) · lgtm continue to apply\n", f.ID, fs.Arg(1), len(r.Decisions), r.Findings.NeedsYou())
+	return nil
+}
+
+// cmdContinue resumes a held run with recorded decisions, no terminal needed.
+func cmdContinue(ctx context.Context, args []string, logger *log.Logger) error {
+	fs := flag.NewFlagSet("continue", flag.ExitOnError)
+	auto := fs.Bool("auto", false, "after applying decisions, fix remaining block findings without asking")
+	noPR := fs.Bool("no-pr", false, "review only; do not push or open a PR")
+	branch := fs.String("b", "", "branch (any worktree of this repo)")
+	fs.Parse(args)
+	cwd, err := dirFor(ctx, *branch)
+	if err != nil {
+		return err
+	}
+	r, _, err := loadCurrent(ctx, *branch)
+	if err != nil {
+		return err
+	}
+	if r.Phase != run.Held {
+		return fmt.Errorf("run is %s; nothing to continue", r.Phase)
+	}
+	if len(r.Decisions) == 0 && !*auto {
+		return errors.New("nothing decided yet — lgtm decide ID fix|accept|dismiss|skip, or continue --auto")
+	}
+	return ceremony.Run(ctx, ceremony.Options{Dir: cwd, Auto: *auto, NoPR: *noPR, Log: logger, Decider: &ceremony.RecordedDecider{}})
 }
 
 func cmdDoctor(ctx context.Context) error {

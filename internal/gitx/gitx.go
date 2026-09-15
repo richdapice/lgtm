@@ -186,3 +186,22 @@ func BranchFast(dir string) string {
 		dir = parent
 	}
 }
+
+// WorktreeFor finds the checkout of a branch among the repo's worktrees, so
+// `lgtm -b <branch>` works from anywhere in the repo.
+func WorktreeFor(ctx context.Context, dir, branch string) (string, error) {
+	out, err := Run(ctx, dir, "worktree", "list", "--porcelain")
+	if err != nil {
+		return "", err
+	}
+	var path string
+	for _, line := range strings.Split(out, "\n") {
+		switch {
+		case strings.HasPrefix(line, "worktree "):
+			path = strings.TrimPrefix(line, "worktree ")
+		case line == "branch refs/heads/"+branch && path != "":
+			return path, nil
+		}
+	}
+	return "", fmt.Errorf("git: no worktree has branch %q checked out", branch)
+}

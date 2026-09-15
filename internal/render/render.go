@@ -265,7 +265,7 @@ func single(r *run.Run, now time.Time, st Style, plan *PlanUsage) string {
 	}
 	switch r.Phase {
 	case run.Held:
-		body := st.c(dim, "run lgtm on this branch to decide · lgtm --auto to fix what it can")
+		body := st.c(dim, "lgtm -b "+r.Branch+" · or /lgtm in Claude Code")
 		rows = append(rows, row(st, st.c(warn, "→"), body, "", "→"))
 	case run.Failed:
 		rows = append(rows, row(st, st.c(bad, "✗"), st.c(bad, r.Error), "", "✗"))

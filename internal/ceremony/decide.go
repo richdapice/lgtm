@@ -112,3 +112,40 @@ func (c *Ceremony) apply(decisions map[string]Decision, open []finding.Finding) 
 	c.save()
 	return toFix
 }
+
+// ParseDecision maps the words `lgtm decide` accepts.
+func ParseDecision(s string) (Decision, bool) {
+	switch s {
+	case "fix", "f":
+		return Fix, true
+	case "accept", "a":
+		return Accept, true
+	case "dismiss", "d":
+		return Dismiss, true
+	case "skip", "s":
+		return Skip, true
+	}
+	return 0, false
+}
+
+// RecordedDecider replays decisions written to the run by `lgtm decide`.
+// It answers once; if it's asked again (a later round) with nothing recorded
+// it holds, so a non-interactive continue never spins.
+type RecordedDecider struct{ used bool }
+
+func (d *RecordedDecider) Decide(ctx context.Context, open []finding.Finding, r *run.Run) (map[string]Decision, bool, bool) {
+	out := map[string]Decision{}
+	if d.used || len(r.Decisions) == 0 {
+		return out, false, true
+	}
+	d.used = true
+	for _, f := range open {
+		if w, ok := r.Decisions[f.ID]; ok {
+			if dec, ok := ParseDecision(w); ok {
+				out[f.ID] = dec
+			}
+		}
+	}
+	r.Decisions = nil
+	return out, false, false
+}

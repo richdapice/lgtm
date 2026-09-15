@@ -95,6 +95,8 @@ type Run struct {
 	CI        *CIStatus   `json:"ci,omitempty"`
 	Error     string      `json:"error,omitempty"`
 	PID       int         `json:"pid"` // so a stale file from a dead process is detectable
+	// Decisions recorded by `lgtm decide` while held, consumed by `lgtm continue`.
+	Decisions map[string]string `json:"decisions,omitempty"`
 }
 
 // Elapsed freezes once the run has stopped moving: a held run shows how long

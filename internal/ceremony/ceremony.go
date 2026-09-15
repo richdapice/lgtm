@@ -391,7 +391,22 @@ func (c *Ceremony) rounds(ctx context.Context) error {
 			return nil
 		}
 		var toFix []finding.Finding
-		if c.run.Mode == "auto" {
+		if len(c.run.Decisions) > 0 {
+			// decisions recorded by `lgtm decide` always apply first, whatever the mode
+			decisions, _, _ := (&RecordedDecider{}).Decide(ctx, actionable, c.run)
+			toFix = c.apply(decisions, actionable)
+			actionable = c.actionable()
+			if c.run.Mode == "auto" {
+				for _, f := range actionable {
+					if f.Severity == finding.Block && !f.FixDeclined && !inList(toFix, f.ID) {
+						toFix = append(toFix, f)
+					}
+				}
+			}
+			if len(toFix) == 0 && len(actionable) == 0 {
+				return nil
+			}
+		} else if c.run.Mode == "auto" {
 			// autopilot fixes what can be fixed without a decision: block
 			// findings the fixer hasn't already declined. ask findings are,
 			// by definition, yours — sending them would only bounce.
@@ -695,6 +710,9 @@ func (c *Ceremony) decider() Decider {
 // points at. Stable after prepare; refreshed after each fix round.
 func (c *Ceremony) Files() []diffparse.FileDiff { return c.files }
 
+// Recorded reports whether the held run has decisions waiting for continue.
+func (c *Ceremony) Recorded() int { return len(c.run.Decisions) }
+
 // Snapshot is a copy of the run state, for a UI to seed itself from before
 // the first update arrives (a resumed run doesn't save until something
 // changes).
@@ -809,6 +827,15 @@ func clipText(s string, n int) string {
 		return s[:n] + "…"
 	}
 	return s
+}
+
+func inList(fs []finding.Finding, id string) bool {
+	for _, f := range fs {
+		if f.ID == id {
+			return true
+		}
+	}
+	return false
 }
 
 func firstLines(s string, n int) string {
