@@ -416,8 +416,10 @@ func (c *Ceremony) rounds(ctx context.Context) error {
 			// autopilot means the author delegated the judgement calls too:
 			// everything not already declined goes to the fixer, and what
 			// comes back unfixed is filed, not held
+			// a manual-mode decline was "needs a decision"; autopilot *is* the
+			// decision, so it gets one more try with the mandate
 			for _, f := range actionable {
-				if !f.FixDeclined {
+				if !f.AutoDeclined {
 					toFix = append(toFix, f)
 				}
 			}

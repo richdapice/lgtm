@@ -90,6 +90,9 @@ type Finding struct {
 	// FixDeclined is set when the fixer looked and refused — it needs a human
 	// decision. Autopilot never re-sends one of these; a person can.
 	FixDeclined bool `json:"fix_declined,omitempty"`
+	// AutoDeclined: the fixer declined even with autopilot's mandate. Only
+	// then does autopilot stop sending it.
+	AutoDeclined bool `json:"auto_declined,omitempty"`
 }
 
 // Anchored reports whether the finding points at a specific line. An unanchored
