@@ -157,8 +157,17 @@ func historyRow(h []run.Summary, held int, st Style) string {
 		b.WriteString(ch)
 	}
 	med := median(h)
-	return st.c(dim, fmt.Sprintf("%d runs  ", len(h))) + b.String() +
+	out := st.c(dim, fmt.Sprintf("%d runs  ", len(h))) + b.String() +
 		st.c(dim, fmt.Sprintf("  median %s · %d held", dur(med), held))
+	// consecutive runs that shipped without needing you
+	streak := 0
+	for i := len(h) - 1; i >= 0 && h[i].Outcome == run.Done; i-- {
+		streak++
+	}
+	if streak >= 2 {
+		out += st.c(good, fmt.Sprintf(" · streak %d", streak))
+	}
+	return out
 }
 
 func single(r *run.Run, now time.Time, st Style, plan *PlanUsage) string {

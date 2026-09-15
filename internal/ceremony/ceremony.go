@@ -88,7 +88,28 @@ func Run(ctx context.Context, o Options) error {
 		return c.fail(err)
 	}
 	c.watchCI(ctx)
-	return c.finish(run.Done)
+	if err := c.finish(run.Done); err != nil {
+		return err
+	}
+	c.stamp()
+	return nil
+}
+
+// stamp is the payoff. A run that got here has been read by every lens, had
+// its findings fixed or accepted, passed the repo's checks, and opened a PR.
+// It gets to say the word.
+func (c *Ceremony) stamp() {
+	cnt := c.run.Findings.Counts()
+	line := fmt.Sprintf("%d found · %d fixed · %d accepted · %d filed · %s · ≈$%.2f",
+		c.run.Findings.Discovered(), cnt.Fixed, cnt.Accepted, cnt.Filed,
+		time.Since(c.run.StartedAt).Round(time.Second), c.run.CostUSD)
+	c.println("")
+	c.println("  ╭──────╮")
+	c.println("  │ LGTM │  %s", line)
+	c.println("  ╰──────╯")
+	if c.run.PR != nil {
+		c.println("  %s", c.run.PR.URL)
+	}
 }
 
 func prepare(ctx context.Context, o Options) (*Ceremony, error) {
@@ -635,7 +656,7 @@ func (c *Ceremony) println(format string, a ...any) { fmt.Fprintf(c.o.Out, forma
 
 func (c *Ceremony) printHeld() {
 	open := c.actionable()
-	c.println("\nheld: %d finding(s) need you — run `lgtm` again to review, or `lgtm --auto`", len(open))
+	c.println("\n  not yet — %d need you. run `lgtm` again to review, or `lgtm --auto`.", len(open))
 }
 
 // dirtyFiles is what the fixer touched: modified, added, and untracked paths

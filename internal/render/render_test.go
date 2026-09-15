@@ -104,7 +104,7 @@ func TestCIAndIdleAndMulti(t *testing.T) {
 	hist[3].Outcome = run.Held
 	out = Render(Input{History: hist, IdleRef: "main", Now: now}, Style{Cols: 100})
 	ls = lines(out)
-	if len(ls) != 2 || !strings.Contains(ls[0], "idle   20 runs today") || !strings.Contains(ls[1], "20 runs  ▁") || !strings.Contains(ls[1], "1 held") {
+	if len(ls) != 2 || !strings.Contains(ls[0], "idle   20 runs today") || !strings.Contains(ls[1], "20 runs  ▁") || !strings.Contains(ls[1], "1 held") || !strings.Contains(ls[1], "streak 16") {
 		t.Fatalf("idle layout:\n%s", out)
 	}
 
