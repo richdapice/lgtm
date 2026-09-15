@@ -68,12 +68,21 @@ func MergeBase(ctx context.Context, dir, base, head string) (string, error) {
 
 // Diff is the unified diff from the merge-base to head — the PR's diff, not
 // "everything that differs from main", which would include main's own progress.
-func Diff(ctx context.Context, dir, mergeBase, head string) (string, error) {
-	return Run(ctx, dir, "diff", "--no-color", "--no-ext-diff", mergeBase, head)
+// pathspecs are appended after "--", so callers can exclude (":!path").
+func Diff(ctx context.Context, dir, mergeBase, head string, pathspecs ...string) (string, error) {
+	args := []string{"diff", "--no-color", "--no-ext-diff", mergeBase, head}
+	if len(pathspecs) > 0 {
+		args = append(append(args, "--"), pathspecs...)
+	}
+	return Run(ctx, dir, args...)
 }
 
-func ChangedFiles(ctx context.Context, dir, mergeBase, head string) ([]string, error) {
-	out, err := Run(ctx, dir, "diff", "--name-only", mergeBase, head)
+func ChangedFiles(ctx context.Context, dir, mergeBase, head string, pathspecs ...string) ([]string, error) {
+	args := []string{"diff", "--name-only", mergeBase, head}
+	if len(pathspecs) > 0 {
+		args = append(append(args, "--"), pathspecs...)
+	}
+	out, err := Run(ctx, dir, args...)
 	if err != nil {
 		return nil, err
 	}

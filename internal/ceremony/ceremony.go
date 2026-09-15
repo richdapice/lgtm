@@ -121,7 +121,7 @@ func (c *Ceremony) Run(ctx context.Context) error {
 func (c *Ceremony) stamp() {
 	cnt := c.run.Findings.Counts()
 	line := fmt.Sprintf("%d found · %d fixed · %d accepted · %d filed · %s · ≈$%.2f",
-		c.run.Findings.Discovered(), cnt.Fixed, cnt.Accepted, cnt.Filed,
+		len(c.run.Findings.Findings), cnt.Fixed, cnt.Accepted, cnt.Filed,
 		time.Since(c.run.StartedAt).Round(time.Second), c.run.CostUSD)
 	c.println("")
 	c.println("  ╭──────╮")
@@ -265,15 +265,18 @@ func prepare(ctx context.Context, o Options) (*Ceremony, error) {
 	return c, nil
 }
 
+// ownFiles are lgtm's, never part of the change under review.
+var ownFiles = []string{":!.lgtm.toml", ":!.lgtm/"}
+
 func (c *Ceremony) refreshDiff(ctx context.Context) error {
 	var err error
-	if c.diff, err = gitx.Diff(ctx, c.root, c.mergeBase, "HEAD"); err != nil {
+	if c.diff, err = gitx.Diff(ctx, c.root, c.mergeBase, "HEAD", ownFiles...); err != nil {
 		return err
 	}
 	if c.files, err = diffparse.Parse(c.diff); err != nil {
 		return fmt.Errorf("parse diff: %w", err)
 	}
-	c.changed, err = gitx.ChangedFiles(ctx, c.root, c.mergeBase, "HEAD")
+	c.changed, err = gitx.ChangedFiles(ctx, c.root, c.mergeBase, "HEAD", ownFiles...)
 	return err
 }
 
@@ -729,9 +732,8 @@ func (c *Ceremony) finish(p run.Phase) error {
 		Branch: c.branch, EndedAt: time.Now().UTC(), Duration: time.Since(c.run.StartedAt),
 		Outcome: p, Found: c.run.Findings.Discovered(), Fixed: cnt.Fixed, CostUSD: c.run.CostUSD,
 	})
-	if p == run.Done {
-		return run.Remove(c.common, c.branch)
-	}
+	// the file stays after Done so `lgtm findings` can still answer; the bar
+	// ignores finished runs whose process is gone
 	c.save()
 	return nil
 }
@@ -917,6 +919,22 @@ func firstLines(s string, n int) string {
 		lines = append(lines[:n], "…")
 	}
 	return strings.Join(lines, "\n         ")
+}
+
+// environmentFailure spots a check that failed because the tools aren't
+// there, not because the fix is wrong: worktrees often lack node_modules.
+func environmentFailure(rs []project.Result) string {
+	for _, r := range rs {
+		if r.Skipped || r.OK {
+			continue
+		}
+		for _, sig := range []string{"command not found", "Cannot find module", "MODULE_NOT_FOUND", "not found and will be installed"} {
+			if strings.Contains(r.Output, sig) {
+				return r.Project + " " + r.Kind + ": " + sig
+			}
+		}
+	}
+	return ""
 }
 
 func checksText(rs []project.Result) string {

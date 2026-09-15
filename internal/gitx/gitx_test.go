@@ -48,6 +48,9 @@ func TestBranchDiffAndTree(t *testing.T) {
 	if len(files) != 1 || files[0] != "a.txt" {
 		t.Fatalf("files = %v", files)
 	}
+	if ex, _ := ChangedFiles(ctx, dir, mb, "HEAD", ":!a.txt"); len(ex) != 0 {
+		t.Fatalf("pathspec exclusion ignored: %v", ex)
+	}
 	t1, _ := TreeHash(ctx, dir, "HEAD")
 	Run(ctx, dir, "commit", "-q", "--allow-empty", "--amend", "-m", "reworded")
 	t2, _ := TreeHash(ctx, dir, "HEAD")
