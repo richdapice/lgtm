@@ -81,7 +81,7 @@ func TestHeldLayout(t *testing.T) {
 	if !strings.Contains(ls[5], "● ● ●") || !strings.Contains(ls[5], "round 3/3") || !strings.Contains(ls[5], "4 open") {
 		t.Fatalf("loop row = %q", ls[5])
 	}
-	if !strings.Contains(ls[6], "4 need you") || !strings.Contains(ls[6], "a autopilot") {
+	if !strings.Contains(ls[6], "4 need you") || !strings.Contains(ls[6], "run lgtm on this branch") {
 		t.Fatalf("prompt row = %q", ls[6])
 	}
 }

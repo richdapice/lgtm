@@ -93,3 +93,13 @@ func lastNonEmptyLine(s string) string {
 	}
 	return ""
 }
+
+// React adds a reaction to a PR from the authenticated user. content is the
+// GitHub name: "eyes", "+1", "heart", ... Reactions on a PR go through the
+// issues endpoint. Adding the same reaction twice is a no-op server-side.
+func (c Client) React(ctx context.Context, owner, repo string, number int, content string) error {
+	_, err := c.run(ctx, nil, "api", "-X", "POST",
+		fmt.Sprintf("repos/%s/%s/issues/%d/reactions", owner, repo, number),
+		"-f", "content="+content)
+	return err
+}

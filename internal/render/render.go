@@ -232,7 +232,7 @@ func single(r *run.Run, now time.Time, st Style, plan *PlanUsage) string {
 	case run.Held:
 		n := r.Findings.Counts().Open
 		body := st.c(warn, fmt.Sprintf("%d need you", n)) + "    " +
-			st.c(dim, "⏎ review    a autopilot    s skip all")
+			st.c(dim, "run lgtm on this branch to review · lgtm --auto to fix")
 		rows = append(rows, row(st, st.c(warn, "→"), body, "", "→"))
 	case run.Failed:
 		rows = append(rows, row(st, st.c(bad, "✗"), st.c(bad, r.Error), "", "✗"))

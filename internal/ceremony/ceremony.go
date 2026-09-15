@@ -339,7 +339,27 @@ func (c *Ceremony) discover(ctx context.Context) error {
 	}
 	c.run.Findings.Close()
 	c.save()
+	if c.run.Findings.Discovered() == 0 {
+		c.println("  0 found. Suspicious.")
+	}
 	return nil
+}
+
+// react is best-effort and never fails a run. It needs a PR to react to, so
+// the eyes land when the PR exists — at open, or at start when resuming a
+// branch that already has one.
+func (c *Ceremony) react(ctx context.Context, content string) {
+	if !c.repo.Settings.ReactionsOn() || c.run.PR == nil {
+		return
+	}
+	owner, repo, err := c.gh.RepoNWO(ctx)
+	if err != nil {
+		c.log("react: %v", err)
+		return
+	}
+	if err := c.gh.React(ctx, owner, repo, c.run.PR.Number, content); err != nil {
+		c.log("react %s: %v", content, err)
+	}
 }
 
 // rounds is the bounded loop. The set only shrinks: fixes move findings to
@@ -496,6 +516,7 @@ func (c *Ceremony) openPR(ctx context.Context) error {
 	if n, url, ok, err := c.gh.FindPR(ctx, c.branch); err == nil && ok {
 		c.run.PR = &run.PRInfo{Number: n, URL: url}
 		c.save()
+		c.react(ctx, "eyes")
 		c.println("PR already open: %s", url)
 		return nil
 	}
@@ -531,6 +552,7 @@ func (c *Ceremony) openPR(ctx context.Context) error {
 	}
 	c.run.PR = &run.PRInfo{Number: n, URL: url}
 	c.save()
+	c.react(ctx, "eyes")
 	c.println("opened %s", url)
 	return nil
 }
@@ -564,6 +586,7 @@ func (c *Ceremony) watchCI(ctx context.Context) {
 				c.println("ci: %d check(s) failed — %s", fail, c.run.PR.URL)
 			} else {
 				c.println("ci: %d/%d green", pass, c.run.CI.Total)
+				c.react(ctx, "+1")
 			}
 			return
 		}

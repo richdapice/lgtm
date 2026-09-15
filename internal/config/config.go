@@ -46,16 +46,21 @@ type Repo struct {
 }
 
 type Settings struct {
-	Mode         string `toml:"mode"`           // manual | auto
-	MaxFixRounds int    `toml:"max_fix_rounds"` // verify rounds before handing off
-	Fanout       string `toml:"fanout"`         // single | parallel
-	Agent        string `toml:"agent,omitempty"`          // overrides Global.DefaultAgent
-	Base         string `toml:"base,omitempty"`           // PR base; empty = detect default branch
+	Mode         string `toml:"mode"`            // manual | auto
+	MaxFixRounds int    `toml:"max_fix_rounds"`  // verify rounds before handing off
+	Fanout       string `toml:"fanout"`          // single | parallel
+	Agent        string `toml:"agent,omitempty"` // overrides Global.DefaultAgent
+	Base         string `toml:"base,omitempty"`  // PR base; empty = detect default branch
 	// MaxBudgetUSD caps each agent call. A reviewer with Read/Grep can explore
 	// well beyond the diff, which is where quality comes from and where cost
 	// goes; this is the knob. 0 = uncapped.
 	MaxBudgetUSD float64 `toml:"max_budget_usd,omitempty"`
+	// Reactions: 👀 on the PR when the run has it, 👍 when CI goes green.
+	// The two reactions every PR gets anyway, from the account running lgtm.
+	Reactions *bool `toml:"reactions,omitempty"` // nil = on
 }
+
+func (s Settings) ReactionsOn() bool { return s.Reactions == nil || *s.Reactions }
 
 type Lens struct {
 	Model   string `toml:"model"`
