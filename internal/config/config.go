@@ -18,7 +18,7 @@ import (
 // macOS it resolves to ~/Library/Application Support, which nobody edits by hand.
 type Global struct {
 	DefaultAgent string  `toml:"default_agent"`
-	Agents       []Agent `toml:"agent"`
+	Agents       []Agent `toml:"agent,omitempty"`
 }
 
 // Agent is a CLI that reads a prompt on stdin and answers on stdout. Schema says
@@ -49,12 +49,12 @@ type Settings struct {
 	Mode         string `toml:"mode"`           // manual | auto
 	MaxFixRounds int    `toml:"max_fix_rounds"` // verify rounds before handing off
 	Fanout       string `toml:"fanout"`         // single | parallel
-	Agent        string `toml:"agent"`          // overrides Global.DefaultAgent
-	Base         string `toml:"base"`           // PR base; empty = detect default branch
+	Agent        string `toml:"agent,omitempty"`          // overrides Global.DefaultAgent
+	Base         string `toml:"base,omitempty"`           // PR base; empty = detect default branch
 	// MaxBudgetUSD caps each agent call. A reviewer with Read/Grep can explore
 	// well beyond the diff, which is where quality comes from and where cost
 	// goes; this is the knob. 0 = uncapped.
-	MaxBudgetUSD float64 `toml:"max_budget_usd"`
+	MaxBudgetUSD float64 `toml:"max_budget_usd,omitempty"`
 }
 
 type Lens struct {
