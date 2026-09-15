@@ -1,8 +1,8 @@
 # lgtm
 
-Fresh eyes on your branch before the PR opens.
+**Fresh eyes on your branch before the PR opens.**
 
-`lgtm` reads your diff, works the findings with you, then opens the pull request and watches CI. It's the review that happens *before* you ask someone for one — run it instead of `gh pr create`.
+Run it instead of `gh pr create`. It reads your diff, tells you what a careful reviewer would have said, fixes what you tell it to, opens the pull request, and watches CI.
 
 ```
 $ lgtm
@@ -23,9 +23,43 @@ $ lgtm
    Fix   Accept   Dismiss   Skip     ↑↓ finding · ←→ action · ⏎ apply · A autopilot · q hold
 ```
 
-Pick a finding, pick an action, press Enter. Nothing is applied until you do. When every finding has a decision the bar becomes `⏎ submit`; fixes run in place, your checks run on what changed, and the round's result comes back into the same panel.
+## Why
 
-When it's through:
+You already run the tests before you push. What you usually don't have is someone who read the change. Reviewers are busy, and the bugs that get through tend to be the kind a second pair of eyes catches in thirty seconds. `lgtm` is that second pair of eyes, on your machine, before anyone else has to spend theirs.
+
+It uses whatever coding agent you already pay for. With Claude Code, that's your subscription.
+
+## Install
+
+```sh
+go install github.com/richdapice/lgtm@latest
+```
+
+You need `git`, `gh` logged in, and a review agent on your PATH. `claude` works out of the box. Others take one config entry, described below.
+
+```sh
+cd your-repo
+lgtm init            # finds your projects, asks a few questions, writes .lgtm.toml
+lgtm doctor          # makes sure the agent answers
+```
+
+Then, on a branch with your work committed:
+
+```sh
+lgtm
+```
+
+## A run, start to finish
+
+First it reads the diff. Four lenses look at what changed between your branch and its base: correctness, your project's conventions (it reads `CLAUDE.md` and `AGENTS.md` if you have them), security, and tests. That's one agent call by default. The agent can read the rest of the repo while it thinks, which is where the good findings come from. The one above needed to know that nothing else in the file scheduled a retry.
+
+Then it shows you what it found. Each finding is a `block` (must be fixed), an `ask` (your call), or a `file` (worth writing down, no need to stop). The `file` ones are recorded and stay out of your way. The rest go in the panel, one at a time, with the lines they point at.
+
+You decide. Pick a finding, pick an action, press Enter. Nothing happens until you do. When every finding has a decision, Enter once more submits the round.
+
+The agent makes the fixes in your working tree. Your own checks then run on the files it touched (`vitest related`, `eslint`, `go vet`, whatever `init` found), and only a green result gets committed. A fix that breaks the tests is reverted, and you see why. After that it checks each finding you asked to fix against the new diff. This goes up to three rounds. Then it either ships or hands the rest back to you.
+
+Finally it pushes, writes the PR body from the diff and the literal check output, opens the PR, and reacts 👀 from your account. It watches CI and reacts 👍 when that's green. It doesn't touch the PR again after that.
 
 ```
 round 1/3: 2 fixed · 0 filed · 0 open
@@ -36,7 +70,7 @@ round 1/3: 2 fixed · 0 filed · 0 open
   https://github.com/you/repo/pull/126
 ```
 
-When it isn't — it parks the run and tells you exactly what's waiting:
+If it stops short, it says what for, and running `lgtm` again picks up where it left off without a second review:
 
 ```
   not yet — 1 need you:
@@ -44,48 +78,50 @@ When it isn't — it parks the run and tells you exactly what's waiting:
   run `lgtm` to decide.
 ```
 
-`lgtm` again resumes right there, without re-reviewing.
+## Deciding
 
-## What it does
-
-1. **Discover.** Four lenses read the diff between your branch and its base — correctness, conventions (it reads your `CLAUDE.md` / `AGENTS.md`), security, tests. One agent call by default; one per lens in parallel if you ask.
-2. **Rounds.** Each finding is `block`, `ask`, or `file`. In the panel you fix, accept, or dismiss each one, or flip to autopilot and let it fix what it can. Every applied fix re-runs your project's own checks before it's committed — a fix that breaks the tests is reverted, not shipped. When the fixer declines a finding, its reason stays on the finding and you decide with it in front of you.
-3. **PR.** It pushes, writes the PR body from the diff and the literal check output, and opens the PR.
-4. **CI.** It watches the checks and keeps the status bar honest. It never repairs and never force-pushes.
-
-Manual mode is the default. Press `A` during a review to hand the rest to autopilot; `lgtm --auto` starts there. Autopilot never asks: every finding goes to the fixer with the judgement calls delegated, whatever comes back unfixed is filed and listed in the PR body, and the PR opens — as a draft if an unfixed `block` is in it.
-
-## The panel
-
-It draws inline under your prompt — no full-screen takeover, your scrollback stays — capped at 100 columns and sized to its content. One finding is in focus with the hunk it points at and the anchor line marked; the rest are one line each.
+The panel draws under your prompt, so there's no full-screen takeover and your scrollback stays. It's never wider than 100 columns.
 
 | | |
 |---|---|
-| `↑` `↓` · `j` `k` | choose a finding |
-| `←` `→` · `tab` · `f` `a` `d` `s` | move the highlight across **Fix · Accept · Dismiss · Skip** |
-| `⏎` | apply the highlighted action to the focused finding, then focus the next undecided one |
+| `↑` `↓` | choose a finding |
+| `←` `→` or `f` `a` `d` `s` | move the highlight across **Fix · Accept · Dismiss · Skip** |
+| `⏎` | apply it to the focused finding, then focus the next undecided one |
 | `⏎` again, once all are decided | submit the round |
-| `A` | autopilot from here: everything undecided becomes Fix |
-| `q` | hold — park the run, exit 2, come back later |
+| `A` | autopilot from here |
+| `q` | hold: park the run and come back later |
 
-`--plain` gets you line prompts instead, and that's what you get automatically when stdout isn't a terminal.
+What each action means:
 
-## From anywhere, without a terminal
+| | |
+|---|---|
+| Fix | the agent changes the code; your checks run on it before it's committed |
+| Accept | seen it, it's fine as-is |
+| Dismiss | never show this again; it goes on a list you commit with the repo |
+| Skip | not now; it stays open and the PR body says so |
 
-The status bar shows a held run in every Claude Code session, so you shouldn't need to find the right terminal to act on it.
+Sometimes the agent won't fix something because it needs a design decision first ("crop the video for phones, or re-render it?"). It says so, and its reason stays on the finding. You can answer with a direction: `lgtm decide 0fe5 fix -m "crop it"`.
+
+Manual mode is the default, and it asks you about each finding. Autopilot doesn't ask. Every finding goes to the agent with the judgement calls delegated, whatever comes back unfixed is noted in the PR body, and the PR opens. If a `block` shipped unfixed, the PR opens as a draft. Start in autopilot with `lgtm --auto`, or press `A` mid-review.
+
+`--plain` swaps the panel for line prompts, which is also what you get when stdout isn't a terminal.
+
+## From anywhere
+
+A waiting run shows in the status bar of every Claude Code session, so you shouldn't have to hunt for the right terminal to act on it.
 
 ```sh
-lgtm -b my-branch                     # open the panel for that branch's run, from any directory in the repo
-lgtm decide 0fe5 accept -b my-branch  # record a decision, no terminal needed (id prefixes work)
-lgtm continue -b my-branch            # apply what's recorded, run the round, open the PR
-lgtm continue --auto -b my-branch     # …then autopilot the block findings
+lgtm -b my-branch                       # the panel for that branch, from any directory in the repo
+lgtm decide 0fe5 accept -b my-branch    # record a decision without a terminal; id prefixes are fine
+lgtm continue -b my-branch              # apply what's recorded, run the round, open the PR
+lgtm continue --auto -b my-branch       # …and autopilot the rest
 ```
 
-`lgtm init --skill` installs a `/lgtm` skill for Claude Code. In any chat: `/lgtm` shows what's waiting, you say "accept the first, fix the second", it records those and continues. The bar updates as it goes.
+`lgtm init --skill` installs a `/lgtm` skill for Claude Code. In any chat, `/lgtm` shows what's waiting; you say "accept the first, fix the second"; it records that and continues.
 
 ## The status bar
 
-`lgtm init --statusline` puts a live bar in Claude Code's status line (or point any status line at `lgtm statusline`). It re-renders in about 4ms and breathes with the run:
+`lgtm init --statusline` adds a live bar to Claude Code's status line. It renders in about four milliseconds and changes shape with the run:
 
 ```
 ── a review in flight
@@ -103,7 +139,7 @@ lgtm continue --auto -b my-branch     # …then autopilot the block findings
 ── waiting on you
   lgtm ▸ worktree-sync-throttle → main   2 need you   3m16s   ≈$0.62
  loop ● ● ●  round 3/3      2 open · 8 fixed · 3 filed
-    → run lgtm on this branch to decide · lgtm --auto to fix what it can
+    → lgtm -b worktree-sync-throttle · or /lgtm in Claude Code
 
 ── PR open, watching CI
   lgtm ▸ worktree-sync-throttle → main   passed   4m01s   ≈$0.71
@@ -114,57 +150,25 @@ lgtm continue --auto -b my-branch     # …then autopilot the block findings
       20 runs  ▂▃▂▅▂▂▇▃▂▂▄▂▃▂▂▃▅▂▂▃  median 2m38s · 3 held · streak 4
 ```
 
-Only the running lens gets a bright bar; finished ones go quiet. The idle row is the last twenty runs as a sparkline, with your streak of runs that shipped without needing you. `#126` is a link.
-
-The PR gets 👀 from your account when it opens and 👍 when CI goes green — the two reactions every PR gets anyway. `reactions = false` turns that off.
-
-## Four promises
-
-These are the design, stated as things it will not do:
-
-- **It never holds your branch.** No proxy remote, no mirror ref, no holding area. It reads git and calls `gh`. There is nothing to get stuck and nothing to recover.
-- **It never re-reviews cold.** Discover runs once into a closed set. After that it only *verifies* that set, which can only shrink. Anything new it notices during a fix round is filed, not added — so the loop terminates, by construction.
-- **Nothing ships unvalidated.** The tree that gets pushed is a tree your checks ran on. If a fix round changes something, the checks run again.
-- **Reviewers are read-only.** The review agent can read the repo; it cannot run commands. The fix agent can edit; it cannot run commands either. Your checks are the only thing that executes code.
-
-## Install
-
-```sh
-go install github.com/richdapice/lgtm@latest
-```
-
-Needs `git`, `gh` (authenticated), and at least one review agent on your PATH — `claude` by default.
-
-## Quick start
-
-```sh
-cd your-repo
-lgtm init          # detects your projects, asks a few questions, writes .lgtm.toml
-lgtm doctor        # checks each configured agent answers
-git checkout -b my-change
-# ... commit your work ...
-lgtm               # review, fix, open the PR
-```
-
-`lgtm init --statusline` adds the live bar to Claude Code's status line. It re-renders in about 4ms.
+The bright bar is whatever is running now; finished lenses go quiet. Idle shows your last twenty runs as a sparkline and how many in a row shipped without needing you. `#126` is a link. `5h 37% ↺ 2h23m` is your subscription's 5-hour window, how much of it is used and when it resets, and `7d` is the weekly one. They show whenever Claude Code passes them along.
 
 ## Configuration
 
-`.lgtm.toml` at your repo root, written by `init`:
+`init` writes `.lgtm.toml` at the repo root. The part you'll actually edit is which commands check which files:
 
 ```toml
 [lgtm]
-mode = "manual"        # manual | auto
+mode = "manual"          # manual | auto
 max_fix_rounds = 3
-fanout = "single"      # single | parallel
-# max_budget_usd = 0.75  # hard cap per agent call; 0 = uncapped
+fanout = "single"        # single | parallel
+# max_budget_usd = 0.75  # cap per agent call; 0 = none
 
 [lens.conventions]
-model = "haiku"        # per-lens model when fanout = "parallel"
+model = "haiku"          # per-lens model when fanout = "parallel"
 
-[[project]]            # monorepos: first path-prefix match wins, "." last
+[[project]]              # monorepos: first path-prefix match wins, so "." goes last
 path = "website"
-test = ""              # empty = skipped and reported as skipped, never counted as a pass
+test = ""                # empty = skipped, and reported as skipped, never as a pass
 lint = "npm run typecheck"
 
 [[project]]
@@ -173,7 +177,7 @@ test = "npx vitest related {files} --run"
 lint = "npm run typecheck && npx eslint {files}"
 ```
 
-Agents live in `~/.config/lgtm/config.toml`. Any CLI that reads a prompt on stdin and answers on stdout works:
+Agents live in `~/.config/lgtm/config.toml`. Anything that reads a prompt on stdin and answers on stdout will do:
 
 ```toml
 default_agent = "claude"
@@ -183,30 +187,37 @@ name = "claude"
 command = ["claude", "-p", "--restricted", "--permission-prompts", "none", "--output-format", "json"]
 fix_command = ["claude", "-p", "--permission-mode", "acceptEdits", "--permission-prompts", "none",
                "--allowedTools", "Read,Edit,Write,Grep,Glob", "--output-format", "json"]
-schema = "native"      # returns validated JSON for a schema
+schema = "native"        # the CLI validates JSON against a schema itself
 model = "opus"
 
 [[agent]]
 name = "copilot"
 command = ["copilot", "-s", "--no-ask-user", "--deny-tool", "shell", "--deny-tool", "write"]
-schema = "prompt"      # schema goes in the prompt; the reply is parsed leniently
+schema = "prompt"        # schema goes in the prompt; the reply is parsed leniently, then validated
 ```
 
-`schema = "native"` uses the CLI's own structured output and gets validated objects back. `schema = "prompt"` pastes the schema into the prompt and extracts the JSON from whatever comes back — code fences and prose included — then validates it the same way. Either way, a finding with a bad line number is snapped to the nearest reviewable line rather than dropped.
+There are two commands per agent because reviewing and fixing are different jobs. The reviewer can read but not run anything. The fixer can edit but not run anything. Your checks are the only thing that executes code.
 
 ## Costs
 
-The `≈$` figures are estimates at API list price, computed locally. On a Claude Pro or Max subscription they are not charges — usage counts against your plan's rolling 5-hour and 7-day windows, which the status bar shows as `5h 37% ↺ 2h23m · 7d 61% ↺ 3d04h`: how much of each window is used, and when it resets. On a metered agent they are real; set `max_budget_usd`.
+The `≈$` figures are what a call would cost at API list price, worked out locally. On a Claude Pro or Max subscription they aren't charges; usage counts against the 5-hour and 7-day windows the status bar shows. On a metered agent they're real, and `max_budget_usd` is the cap.
 
-A review agent that can read the repo will read beyond the diff. That's where the good findings come from and where the cost goes.
+A review of a small diff lands around a dollar or two, most of it the agent reading around the change.
 
-## Other harnesses
+## What it will never do
 
-`lgtm status --json` and `lgtm findings --json` are the machine interface. Exit code `2` means held — findings need a human. Anything that can run a command can drive it.
+- Hold your branch. There's no proxy remote, no mirror ref, no holding area. It reads git and calls `gh`, so nothing can get stuck and there's nothing to recover.
+- Review the same diff twice. It reviews once into a fixed list, then only checks whether items on that list were addressed, and the list only gets shorter. New things it notices during a fix round get written down rather than added. That's why it always finishes.
+- Ship something your checks didn't see. The tree that gets pushed is a tree your tests ran on. If a fix changes the tree, the checks run again.
+- Run your code. Neither agent can execute anything. Only your configured checks do.
+
+## Scripting it
+
+`lgtm status --json` and `lgtm findings --json` are the machine interface. Exit code 2 means findings need a human. Anything that can run a command can drive it.
 
 ## Status
 
-Early. Discover, the status bar, `init`, and `doctor` are exercised against real repos. Fix rounds, PR creation, and the CI watcher are built and unit-tested but have had less time in front of real diffs. Expect edges.
+It's young. It has opened real PRs on a real Electron monorepo. The review, the panel, the bar, `init`, and `doctor` have had the most use; fix rounds and the CI watcher have had less. If something surprises you, it's probably a bug. Open an issue with the debug log (`LGTM_DEBUG=/tmp/lgtm.log lgtm`).
 
 ## License
 
