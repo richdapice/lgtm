@@ -115,7 +115,7 @@ func BuildFixPrompt(fs []finding.Finding, conventions string, autopilot bool) st
 	if autopilot {
 		b.WriteString("AUTOPILOT: the author has delegated judgement calls to you. Where a finding has more than one reasonable resolution, choose the smallest, least surprising one and do it. Leave a finding only if every resolution would change product behavior in a way the author could not want; then reply with one line starting \"declined:\" that names why. Otherwise reply with one line per finding saying what you changed.\n\n")
 	} else {
-	b.WriteString("If a finding cannot be fixed without a decision the author should make, leave it and reply with one line starting \"declined:\" that names the decision. Otherwise reply with one line per finding saying what you changed.\n\n")
+		b.WriteString("If a finding cannot be fixed without a decision the author should make, leave it and reply with one line starting \"declined:\" that names the decision. Otherwise reply with one line per finding saying what you changed.\n\n")
 	}
 	if conventions != "" {
 		b.WriteString("--- CONVENTIONS ---\n" + conventions + "\n\n")
