@@ -7,16 +7,27 @@ Fresh eyes on your branch before the PR opens.
 ```
 $ lgtm
 
-  lgtm ▸ worktree-sync-throttle → main   manual   1m12s   ≈$0.41   5h 37% · 7d 61%
-      ─ review        ████████▊░░░░     –   opus      1m12s
+ lgtm ▸ worktree-sync-throttle → main   2 need you   ≈$0.41
+ ▸ · block correctness  src/main/sync.ts:142  swallowed-error
+   · ask   tests        src/main/sync.test.ts:88  missing-assert
 
-[1/2] ask   correctness  src/main/sync.ts:142  swallowed-error
-      catch (err) { /* retry later */ }
-      The retry never happens — nothing schedules it. Either enqueue the retry
-      here or let the error surface; silently dropping it means a failed sync
-      looks identical to no sync.
-      > f
+    139 +   try {
+    140 +     await push(batch)
+  ▸ 142 +   } catch (err) { /* retry later */ }
+    143 +   }
 
+   The retry never happens — nothing schedules it. Either enqueue the retry here
+   or let the error surface; silently dropping it means a failed sync looks
+   identical to no sync.
+
+   Fix   Accept   Dismiss   Skip     ↑↓ finding · ←→ action · ⏎ apply · A autopilot · q hold
+```
+
+Pick a finding, pick an action, press Enter. Nothing is applied until you do. When every finding has a decision the bar becomes `⏎ submit`; fixes run in place, your checks run on what changed, and the round's result comes back into the same panel.
+
+When it's through:
+
+```
 round 1/3: 2 fixed · 0 filed · 0 open
 
   ╭──────╮
@@ -25,14 +36,74 @@ round 1/3: 2 fixed · 0 filed · 0 open
   https://github.com/you/repo/pull/126
 ```
 
+When it isn't — it parks the run and tells you exactly what's waiting:
+
+```
+  not yet — 1 need you:
+    ask   website/src/app/page.tsx:887  landscape-film-illegible-on-phones · fixer declined, needs your decision
+  run `lgtm` to decide.
+```
+
+`lgtm` again resumes right there, without re-reviewing.
+
 ## What it does
 
 1. **Discover.** Four lenses read the diff between your branch and its base — correctness, conventions (it reads your `CLAUDE.md` / `AGENTS.md`), security, tests. One agent call by default; one per lens in parallel if you ask.
-2. **Rounds.** Each finding is `block`, `ask`, or `file`. You fix, accept, or dismiss each one, or flip to autopilot and let it fix what it can. Every applied fix re-runs your project's own checks before it's committed — a fix that breaks the tests is reverted, not shipped.
+2. **Rounds.** Each finding is `block`, `ask`, or `file`. In the panel you fix, accept, or dismiss each one, or flip to autopilot and let it fix what it can. Every applied fix re-runs your project's own checks before it's committed — a fix that breaks the tests is reverted, not shipped. When the fixer declines a finding, its reason stays on the finding and you decide with it in front of you.
 3. **PR.** It pushes, writes the PR body from the diff and the literal check output, and opens the PR.
 4. **CI.** It watches the checks and keeps the status bar honest. It never repairs and never force-pushes.
 
 Manual mode is the default. Press `A` during a review to hand the rest to autopilot; `lgtm --auto` starts there. Autopilot fixes `block` findings; `ask` findings are yours by definition and come straight to you, and a finding the fixer has declined once is never sent again automatically.
+
+## The panel
+
+It draws inline under your prompt — no full-screen takeover, your scrollback stays — capped at 100 columns and sized to its content. One finding is in focus with the hunk it points at and the anchor line marked; the rest are one line each.
+
+| | |
+|---|---|
+| `↑` `↓` · `j` `k` | choose a finding |
+| `←` `→` · `tab` · `f` `a` `d` `s` | move the highlight across **Fix · Accept · Dismiss · Skip** |
+| `⏎` | apply the highlighted action to the focused finding, then focus the next undecided one |
+| `⏎` again, once all are decided | submit the round |
+| `A` | autopilot from here: everything undecided becomes Fix |
+| `q` | hold — park the run, exit 2, come back later |
+
+`--plain` gets you line prompts instead, and that's what you get automatically when stdout isn't a terminal.
+
+## The status bar
+
+`lgtm init --statusline` puts a live bar in Claude Code's status line (or point any status line at `lgtm statusline`). It re-renders in about 4ms and breathes with the run:
+
+```
+── a review in flight
+  lgtm ▸ worktree-sync-throttle → main   manual   1m12s   ≈$0.41   5h 37% · 7d 61%
+      ─ review        ████████▊░░░░     –   opus      1m12s
+
+── lenses in parallel (fanout = "parallel")
+  lgtm ▸ worktree-sync-throttle → main   manual   2m14s   ≈$0.09
+      ╭ correctness  ─────────────  ✓  7   opus      42s
+      │ conventions  ████████▊░░░░     –   haiku     12s
+      │ security     ─────────────  ✓  2   opus      38s
+      ╰ tests        ██████▎░░░░░░     –   sonnet  1m04s
+ loop ● ● ○  round 2/3      4 open · 6 fixed · 2 filed
+
+── held, waiting on you
+  lgtm ▸ worktree-sync-throttle → main   held   3m16s   ≈$0.62
+ loop ● ● ●  round 3/3      2 open · 8 fixed · 3 filed
+    → 2 need you    run lgtm on this branch to review · lgtm --auto to fix
+
+── PR open, watching CI
+  lgtm ▸ worktree-sync-throttle → main   passed   4m01s   ≈$0.71
+   ci ◍ #126   ▰▰▱▱   check 2/4 · 1m12s
+
+── idle
+  lgtm ▸ main   idle   12 runs today   5h 37% · 7d 61%
+      20 runs  ▂▃▂▅▂▂▇▃▂▂▄▂▃▂▂▃▅▂▂▃  median 2m38s · 3 held · streak 4
+```
+
+Only the running lens gets a bright bar; finished ones go quiet. The idle row is the last twenty runs as a sparkline, with your streak of runs that shipped without needing you. `#126` is a link.
+
+The PR gets 👀 from your account when it opens and 👍 when CI goes green — the two reactions every PR gets anyway. `reactions = false` turns that off.
 
 ## Four promises
 
