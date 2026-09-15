@@ -34,9 +34,20 @@ import (
 var version = "dev"
 
 func main() {
-	logger := log.New(io.Discard, "", log.Ltime)
-	if p := os.Getenv("LGTM_DEBUG"); p != "" {
-		if f, err := os.OpenFile(p, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644); err == nil {
+	// there is always a log: a run you want to understand after the fact is
+	// exactly the one you didn't think to set LGTM_DEBUG for
+	logger := log.New(io.Discard, "", log.Ldate|log.Ltime)
+	logPath := os.Getenv("LGTM_DEBUG")
+	if logPath == "" {
+		if cwd, err := os.Getwd(); err == nil {
+			if common, err := gitx.FindCommonDir(cwd); err == nil {
+				os.MkdirAll(filepath.Join(common, "lgtm"), 0o755)
+				logPath = filepath.Join(common, "lgtm", "lgtm.log")
+			}
+		}
+	}
+	if logPath != "" {
+		if f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644); err == nil {
 			logger.SetOutput(f)
 		}
 	}
@@ -93,7 +104,7 @@ func usage() {
   lgtm version
 
 Exit codes: 0 done · 1 error · 2 held (findings need you; run lgtm again)
-Env: LGTM_DEBUG=/path/to/log   LGTM_CONFIG=/path/to/config.toml
+Log: .git/lgtm/lgtm.log (or LGTM_DEBUG=/path)   Config: LGTM_CONFIG=/path/to/config.toml
 `)
 }
 

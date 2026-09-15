@@ -171,7 +171,7 @@ func prepare(ctx context.Context, o Options) (*Ceremony, error) {
 		return nil, err
 	}
 	c.reviewer = agent.Adapter{Name: ag.Name, Command: ag.Command, Model: ag.Model, Cap: cap,
-		MaxBudgetUSD: c.repo.Settings.MaxBudgetUSD}
+		Dir: c.root, MaxBudgetUSD: c.repo.Settings.MaxBudgetUSD}
 	if len(ag.FixCommand) > 0 {
 		f := c.reviewer
 		f.Command = ag.FixCommand
@@ -381,7 +381,8 @@ func (c *Ceremony) react(ctx context.Context, content string) {
 // Fixed, the user moves them to Accepted or Dismissed, and anything the
 // verifier notices is Filed. File-severity findings never gate anything.
 func (c *Ceremony) rounds(ctx context.Context) error {
-	for round := 1; round <= c.run.MaxRounds; round++ {
+	// a resumed run picks up after the round it was held at, not at 1
+	for round := c.run.Round + 1; round <= c.run.MaxRounds; round++ {
 		actionable := c.actionable()
 		if len(actionable) == 0 {
 			return nil
@@ -423,8 +424,14 @@ func (c *Ceremony) rounds(ctx context.Context) error {
 			return err
 		}
 		if len(touched) == 0 {
-			c.log("round %d: fixer changed nothing", round)
+			why := strings.TrimSpace(fixRes.Text())
+			c.log("round %d: fixer changed nothing: %s", round, why)
 			c.println("round %d: the fixer made no changes", round)
+			if why != "" {
+				c.println("  %s", clipText(why, 600))
+			}
+			c.run.Round = round
+			c.save()
 			break
 		}
 
@@ -752,6 +759,14 @@ func revert(ctx context.Context, root string) error {
 	}
 	_, err := gitx.Run(ctx, root, "clean", "-fd")
 	return err
+}
+
+func clipText(s string, n int) string {
+	s = strings.Join(strings.Fields(s), " ")
+	if len(s) > n {
+		return s[:n] + "…"
+	}
+	return s
 }
 
 func checksText(rs []project.Result) string {

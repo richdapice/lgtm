@@ -46,6 +46,7 @@ type Adapter struct {
 	Command []string
 	Model   string
 	Cap     Capability
+	Dir     string // working directory for the CLI; the repo root, so paths resolve
 
 	// Native-tier only; prompt-tier CLIs have no equivalent flags.
 	MaxBudgetUSD  float64
@@ -135,6 +136,7 @@ func (a Adapter) Ask(ctx context.Context, prompt string, schema json.RawMessage)
 
 	start := time.Now()
 	cmd := exec.CommandContext(ctx, a.Command[0], args...)
+	cmd.Dir = a.Dir
 	cmd.Stdin = strings.NewReader(prompt)
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb
@@ -280,6 +282,15 @@ func (a Adapter) Probe(ctx context.Context) error {
 		return fmt.Errorf("agent: %s answered %q, expected OK", a.Name, firstLine([]byte(s)))
 	}
 	return nil
+}
+
+// Text is the reply as plain text when no schema was requested.
+func (r Result) Text() string {
+	var s string
+	if json.Unmarshal(r.Output, &s) == nil {
+		return s
+	}
+	return string(r.Output)
 }
 
 func strconv(s string) string {

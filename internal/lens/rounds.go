@@ -112,7 +112,7 @@ func BuildFixPrompt(fs []finding.Finding, conventions string) string {
 	var b strings.Builder
 	b.WriteString("Fix the findings below in the working tree. Make the smallest change that resolves each one. ")
 	b.WriteString("Do not refactor, do not touch code outside what a finding names, do not add comments explaining the fix, and do not commit — the caller commits.\n")
-	b.WriteString("If a finding cannot be fixed without a decision the author should make, leave it and say so in one line.\n\n")
+	b.WriteString("If a finding cannot be fixed without a decision the author should make, leave it and reply with one line starting \"declined:\" that names the decision. Otherwise reply with one line per finding saying what you changed.\n\n")
 	if conventions != "" {
 		b.WriteString("--- CONVENTIONS ---\n" + conventions + "\n\n")
 	}
