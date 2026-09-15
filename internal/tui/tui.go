@@ -94,11 +94,14 @@ type model struct {
 }
 
 func newModel(ctx context.Context, cancel context.CancelFunc) *model {
-	m := &model{ctx: ctx, cancel: cancel, marks: map[string]ceremony.Decision{}}
+	// a sane size until the terminal reports one; a pty that never does
+	// (some CI, some multiplexers) must still get a screen, not a blank
+	m := &model{ctx: ctx, cancel: cancel, marks: map[string]ceremony.Decision{}, width: 100, height: 30}
 	m.out = &transcript{m: m}
 	m.decider = &chanDecider{m: m}
 	m.spin = spinner.New(spinner.WithSpinner(spinner.MiniDot))
 	m.diff = viewport.New(0, 0)
+	m.layout()
 	return m
 }
 
@@ -258,9 +261,6 @@ var (
 )
 
 func (m *model) View() string {
-	if m.width == 0 {
-		return ""
-	}
 	var b strings.Builder
 	b.WriteString(m.header() + "\n")
 	list := sBox.Width(m.listWidth()).Height(m.height - 5).Render(m.list())
