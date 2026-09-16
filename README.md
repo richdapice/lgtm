@@ -25,7 +25,7 @@ Needs `git`, `gh` (logged in), and `claude` on your PATH.
 
 ## What you get
 
-**A real review, before anyone else has to do one.** Four lenses read the diff: correctness, your project's conventions (from your `CLAUDE.md`), security, tests. The agent reads around the change, which is where the findings that matter come from.
+**A real review, before anyone else has to do one.** Four [lenses](#the-lenses) read the diff: correctness, your project's conventions, security, tests. Add your own in a line. The agent reads around the change, which is where the findings that matter come from.
 
 **Fixes that are proven, not just made.** Your own test and lint commands run on your diff before the review, and again on every fix. A fix that fails them is reverted. Nothing is committed that your checks didn't see.
 
@@ -62,6 +62,29 @@ Eight gates. `check` is your commands on your diff. `review` is the agent readin
   ╰──────╯
   https://github.com/you/repo/pull/126
 ```
+
+## The lenses
+
+A lens is a paragraph telling the reviewer what to look for. Four are built in, and every finding is tagged with the one that found it:
+
+| Lens | Looks for |
+|---|---|
+| **correctness** | bugs, edge cases, error handling that swallows or mis-reports failures, logic that doesn't do what the diff claims |
+| **conventions** | departures from your project's rules, read from your `CLAUDE.md` and `AGENTS.md`, and from the style of the surrounding code |
+| **security** | secrets in source, injection, auth and permission mistakes, unsafe IPC or deserialization, data written where it shouldn't be |
+| **tests** | behavior that changed without a test changing, tests that don't assert the new behavior, tests that would pass if the change were reverted |
+
+Add your own in `.lgtm.toml`. Name it, say what it looks for, and it runs with the others:
+
+```toml
+[lens.perf]
+prompt = "hot paths doing more work than they need to; N+1 queries; work inside loops that could happen once"
+
+[lens.accessibility]
+prompt = "interactive elements without labels, color used as the only signal, focus order that doesn't follow the layout"
+```
+
+Turn a built-in off with `enabled = false`, rewrite its prompt the same way, or put one on a cheaper model. By default all lenses ride in one agent call; `dispatch = "parallel"` gives each its own, and `passes = ["sonnet", "opus"]` reviews the whole diff twice with a stronger second read. Details in [Configuration](docs/configuration.md#the-review).
 
 ## Three ways to run it
 
