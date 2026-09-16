@@ -2,7 +2,7 @@
 
 **Fresh eyes on your branch before the PR opens.**
 
-![lgtm reviewing a branch: findings, a decision, the gates, the stamp](docs/demo.gif)
+<p align="center"><img src="docs/hero.svg" alt="a pull request gets reviewed, fixed, and stamped LGTM" width="960"></p>
 
 Run it instead of `gh pr create`. It reads your diff, tells you what a careful reviewer would have said, fixes what you tell it to, opens the pull request, and watches CI.
 
@@ -81,6 +81,8 @@ lgtm
 ```
 
 ## A run, start to finish
+
+![lgtm reviewing a branch in the terminal: findings, a decision, the gates, the stamp](docs/demo.gif)
 
 First it reads the diff. Four lenses look at what changed between your branch and its base: correctness, your project's conventions (it reads `CLAUDE.md` and `AGENTS.md` if you have them), security, and tests. That's one agent call by default. The agent can read the rest of the repo while it thinks, which is where the good findings come from. The one above needed to know that nothing else in the file scheduled a retry.
 
