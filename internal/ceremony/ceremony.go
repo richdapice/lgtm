@@ -34,6 +34,10 @@ import (
 // the run file is kept so `lgtm` resumes it.
 var ErrHeld = errors.New("held: findings need you")
 
+// ErrOnBase means the current branch is the base itself; there's no diff to
+// review. The pre-push hook treats it as "nothing to do".
+var ErrOnBase = errors.New("on the base branch; nothing to review")
+
 type Options struct {
 	Dir    string
 	Auto   bool // force autopilot
@@ -155,13 +159,6 @@ func prepare(ctx context.Context, o Options) (*Ceremony, error) {
 	if c.branch, err = gitx.Branch(ctx, c.root); err != nil {
 		return nil, err
 	}
-	clean, err := gitx.IsClean(ctx, c.root)
-	if err != nil {
-		return nil, err
-	}
-	if !clean {
-		return nil, errors.New("working tree has uncommitted changes; commit or stash them first (the fix round edits the tree)")
-	}
 
 	if c.global, err = config.LoadGlobal(); err != nil {
 		return nil, err
@@ -194,7 +191,15 @@ func prepare(ctx context.Context, o Options) (*Ceremony, error) {
 		}
 	}
 	if c.branch == c.base {
-		return nil, fmt.Errorf("on %s; check out the branch you want reviewed", c.base)
+		return nil, fmt.Errorf("%w (%s; check out the branch you want reviewed)", ErrOnBase, c.base)
+	}
+	// lgtm's own files don't count as your uncommitted work
+	clean, err := gitx.IsClean(ctx, c.root, ownFiles...)
+	if err != nil {
+		return nil, err
+	}
+	if !clean {
+		return nil, errors.New("working tree has uncommitted changes; commit or stash them first (the fix round edits the tree)")
 	}
 	c.baseRef = c.base
 	if gitx.RefExists(ctx, c.root, "origin/"+c.base) {
@@ -771,6 +776,17 @@ func (c *Ceremony) watchCI(ctx context.Context) {
 
 func (c *Ceremony) finish(p run.Phase) error {
 	c.run.Phase = p
+	if p == run.Done {
+		// the pre-push hook skips a tree that's been through a full run
+		if tree, err := gitx.TreeHash(context.Background(), c.root, "HEAD"); err == nil {
+			_ = run.MarkReviewed(c.common, tree)
+		}
+	}
+	if p == run.Done {
+		if tree, err := gitx.TreeHash(context.Background(), c.root, "HEAD"); err == nil {
+			_ = run.MarkReviewed(c.common, tree)
+		}
+	}
 	cnt := c.run.Findings.Counts()
 	_ = run.AppendHistory(c.common, run.Summary{
 		Branch: c.branch, EndedAt: time.Now().UTC(), Duration: time.Since(c.run.StartedAt),

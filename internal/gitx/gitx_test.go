@@ -61,6 +61,13 @@ func TestBranchDiffAndTree(t *testing.T) {
 	if !clean {
 		t.Fatal("fresh commit should be clean")
 	}
+	os.WriteFile(filepath.Join(dir, ".lgtm.toml"), []byte("x"), 0o644)
+	if c, _ := IsClean(ctx, dir); c {
+		t.Fatal("untracked file should dirty the tree")
+	}
+	if c, _ := IsClean(ctx, dir, ":!.lgtm.toml"); !c {
+		t.Fatal("ignored pathspec should not dirty the tree")
+	}
 	cd, err := CommonDir(ctx, dir)
 	if err != nil || !filepath.IsAbs(cd) || filepath.Base(cd) != ".git" {
 		t.Fatalf("common dir = %q (%v)", cd, err)

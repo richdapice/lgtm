@@ -3,8 +3,10 @@ package run
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -82,4 +84,34 @@ func History(gitCommonDir string, n int) ([]Summary, error) {
 		all = all[len(all)-n:]
 	}
 	return all, sc.Err()
+}
+
+// reviewedPath lists tree hashes a completed run has already reviewed, so a
+// second push of the same tree doesn't pay for a second review.
+func reviewedPath(gitCommonDir string) string { return filepath.Join(Dir(gitCommonDir), "reviewed") }
+
+func Reviewed(gitCommonDir, tree string) bool {
+	b, err := os.ReadFile(reviewedPath(gitCommonDir))
+	if err != nil {
+		return false
+	}
+	for _, l := range strings.Split(string(b), "\n") {
+		if strings.TrimSpace(l) == tree {
+			return true
+		}
+	}
+	return false
+}
+
+func MarkReviewed(gitCommonDir, tree string) error {
+	if err := os.MkdirAll(Dir(gitCommonDir), 0o755); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(reviewedPath(gitCommonDir), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = fmt.Fprintln(f, tree)
+	return err
 }

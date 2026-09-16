@@ -139,6 +139,14 @@ Autopilot is the default. It doesn't ask: every finding goes to the agent with t
 
 `--plain` swaps the panel for line prompts, which is also what you get when stdout isn't a terminal.
 
+## On every push
+
+```sh
+lgtm init --hook
+```
+
+installs a `pre-push` hook, so every `git push` in the repo is reviewed and fixed first, without asking — autopilot, review only, no PR. Nothing leaves until it's been read. Git has already chosen the commit by the time a hook runs, so if lgtm commits fixes it stops the push and says `push again`; the second push is instant, because a tree that's been through a full run is remembered. Pushing the base branch passes straight through, and `git push --no-verify` skips it when you mean to.
+
 ## From anywhere
 
 A waiting run shows in the status bar of every Claude Code session, so you shouldn't have to hunt for the right terminal to act on it.

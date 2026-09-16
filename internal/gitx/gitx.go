@@ -98,8 +98,14 @@ func TreeHash(ctx context.Context, dir, ref string) (string, error) {
 	return Run(ctx, dir, "rev-parse", ref+"^{tree}")
 }
 
-func IsClean(ctx context.Context, dir string) (bool, error) {
-	out, err := Run(ctx, dir, "status", "--porcelain")
+// IsClean ignores paths matched by the given pathspecs (":!.lgtm.toml", say),
+// so a tool's own untracked files don't count as the user's uncommitted work.
+func IsClean(ctx context.Context, dir string, ignore ...string) (bool, error) {
+	args := []string{"status", "--porcelain"}
+	if len(ignore) > 0 {
+		args = append(append(args, "--"), append([]string{"."}, ignore...)...)
+	}
+	out, err := Run(ctx, dir, args...)
 	if err != nil {
 		return false, err
 	}
