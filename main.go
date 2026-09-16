@@ -88,7 +88,7 @@ func main() {
 		err = cmdContinue(ctx, args, logger)
 	case "version":
 		fmt.Println("lgtm", version)
-	case "help", "-h", "--help":
+	case "help", "-h", "--help", "--h", "-help":
 		usage()
 	default:
 		fatal("unknown command %q (try `lgtm help`)", cmd)
@@ -102,24 +102,57 @@ func main() {
 }
 
 func usage() {
-	fmt.Print(`lgtm — review a branch, then open the PR
+	fmt.Print(`lgtm — fresh eyes on your branch before the PR opens
 
-  lgtm [--manual] [--intent TEXT] [--draft] [--no-pr] [--plain]
-                                                      review the current branch, then open the PR
-  lgtm statusline                                     render the status bar (reads Claude Code JSON on stdin)
-  lgtm decide ID fix|accept|dismiss|skip [-b BRANCH]  record a decision on a held run (no terminal needed)
-  lgtm continue [--auto] [--no-pr] [-b BRANCH]        apply recorded decisions and carry on
-  lgtm status [--json] [-b BRANCH]                    current run for this branch
-  lgtm findings [--json]                              the finding set
-  lgtm dismiss ID [-r REASON]                         never see this finding again (commits to .lgtm/dismissed.toml)
-  lgtm init [-y] [--statusline] [--skill]             detect projects, write .lgtm.toml; wire the status bar and the /lgtm skill
-  lgtm doctor                                         check each configured agent answers
-  lgtm demo                                           a scripted run in the real panel; no agent, no repo
-  lgtm demo bar                                       the status bar through a scripted run, redrawn in place
-  lgtm version
+USAGE
+  lgtm [flags]                 review the current branch, fix what you decide, open the PR
+  lgtm <command> [flags]
 
-Exit codes: 0 done · 1 error · 2 held (findings need you; run lgtm again)
-Log: .git/lgtm/lgtm.log (or LGTM_DEBUG=/path)   Config: LGTM_CONFIG=/path/to/config.toml
+EXAMPLES
+  lgtm                         autopilot: review, fix, open the PR, watch CI
+  lgtm --manual                the same, but ask me about each finding
+  lgtm --no-pr                 review only; nothing pushed
+  lgtm -b my-branch            act on that branch from anywhere in the repo
+  lgtm decide 0fe5 accept      record a decision on a waiting run, no terminal needed
+  lgtm continue                apply recorded decisions and carry on
+
+REVIEW
+  lgtm                         run the ceremony on the current branch
+    --manual                   ask about each finding instead of autopilot
+    --auto                     autopilot (the default)
+    --no-pr                    review only; do not push or open a PR
+    --draft                    open the PR as a draft
+    --intent TEXT              what the change is for (default: the commit messages)
+    --plain                    line prompts instead of the panel
+    -b BRANCH                  any worktree of this repo
+
+ACT ON A WAITING RUN
+  lgtm status [--json]         where the run is: phase, counts, cost
+  lgtm findings [--json]       every finding, with the fixer's notes
+  lgtm decide ID ACTION        fix | accept | dismiss | skip   (id prefixes work)
+    -m "instruction"           with fix: tell the fixer which way to go
+  lgtm continue [--auto]       apply what's recorded, run the round, open the PR
+  lgtm dismiss ID [-r WHY]     never show this finding again (committed with the repo)
+
+SETUP
+  lgtm init [-y]               detect your projects, write .lgtm.toml
+    --statusline               add the live bar to Claude Code's status line
+    --skill                    install the /lgtm skill for Claude Code
+  lgtm doctor                  check each configured agent answers
+
+SEE IT
+  lgtm demo                    a scripted run in the real panel; no agent, no repo
+  lgtm demo bar                the status bar through a scripted run
+  lgtm statusline              render the bar (Claude Code calls this; you don't)
+
+EXIT CODES
+  0 done · 1 error · 2 findings need you (run lgtm again)
+
+FILES
+  .lgtm.toml                   per-repo config, written by init
+  ~/.config/lgtm/config.toml   your agents
+  LGTM_DEBUG=/path             write a debug log there
+
 `)
 }
 
