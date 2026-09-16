@@ -1,4 +1,4 @@
-# lgtm
+# LGTM
 
 **Fresh eyes on your branch before the PR opens.**
 
