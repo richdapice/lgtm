@@ -204,6 +204,12 @@ model = "haiku"          # per-lens model when dispatch = "parallel"
 [lens.perf]              # a lens of your own: name it, say what it looks for
 prompt = "hot paths doing more work than they need to; N+1 queries; work inside loops that could happen once"
 
+[pr]                     # what it leaves on the pull request
+reactions = true         # false turns both off
+on_open = "eyes"         # +1 -1 laugh confused heart hooray rocket eyes, or "" for none
+on_green = "+1"
+# comment = "reviewed by lgtm: {found} found · {fixed} fixed · {filed} noted · {rounds} round(s) · ≈{cost}"
+
 [[project]]              # monorepos: first path-prefix match wins, so "." goes last
 path = "website"
 test = ""                # empty = skipped, and reported as skipped, never as a pass

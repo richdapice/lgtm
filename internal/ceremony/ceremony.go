@@ -109,6 +109,7 @@ func (c *Ceremony) Run(ctx context.Context) error {
 		return c.fail(err)
 	}
 	c.watchCI(ctx)
+	c.comment(ctx)
 	if err := c.finish(run.Done); err != nil {
 		return err
 	}
@@ -400,11 +401,33 @@ func (c *Ceremony) discover(ctx context.Context) error {
 	return nil
 }
 
+// comment posts the configured PR comment, placeholders expanded. Best-effort.
+func (c *Ceremony) comment(ctx context.Context) {
+	tpl := strings.TrimSpace(c.repo.PR.Comment)
+	if tpl == "" || c.run.PR == nil {
+		return
+	}
+	cnt := c.run.Findings.Counts()
+	body := strings.NewReplacer(
+		"{found}", fmt.Sprint(len(c.run.Findings.Findings)),
+		"{fixed}", fmt.Sprint(cnt.Fixed),
+		"{accepted}", fmt.Sprint(cnt.Accepted),
+		"{filed}", fmt.Sprint(cnt.Filed),
+		"{rounds}", fmt.Sprint(len(c.run.Rounds)),
+		"{cost}", fmt.Sprintf("$%.2f", c.run.CostUSD),
+		"{branch}", c.branch,
+		"{url}", c.run.PR.URL,
+	).Replace(tpl)
+	if err := c.gh.Comment(ctx, c.run.PR.Number, body); err != nil {
+		c.log("comment: %v", err)
+	}
+}
+
 // react is best-effort and never fails a run. It needs a PR to react to, so
 // the eyes land when the PR exists — at open, or at start when resuming a
 // branch that already has one.
 func (c *Ceremony) react(ctx context.Context, content string) {
-	if !c.repo.Settings.ReactionsOn() || c.run.PR == nil {
+	if !c.repo.PR.ReactionsOn() || c.run.PR == nil || content == "" {
 		return
 	}
 	owner, repo, err := c.gh.RepoNWO(ctx)
@@ -653,7 +676,7 @@ func (c *Ceremony) openPR(ctx context.Context) error {
 	if n, url, ok, err := c.gh.FindPR(ctx, c.branch); err == nil && ok {
 		c.run.PR = &run.PRInfo{Number: n, URL: url}
 		c.save()
-		c.react(ctx, "eyes")
+		c.react(ctx, c.repo.PR.OnOpen)
 		c.println("PR already open: %s", url)
 		return nil
 	}
@@ -695,7 +718,7 @@ func (c *Ceremony) openPR(ctx context.Context) error {
 	}
 	c.run.PR = &run.PRInfo{Number: n, URL: url}
 	c.save()
-	c.react(ctx, "eyes")
+	c.react(ctx, c.repo.PR.OnOpen)
 	c.println("opened %s", url)
 	return nil
 }
@@ -734,7 +757,7 @@ func (c *Ceremony) watchCI(ctx context.Context) {
 				c.println("ci: %d check(s) failed — %s", fail, c.run.PR.URL)
 			} else {
 				c.println("ci: %d/%d green", pass, c.run.CI.Total)
-				c.react(ctx, "+1")
+				c.react(ctx, c.repo.PR.OnGreen)
 			}
 			return
 		}

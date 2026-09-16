@@ -131,3 +131,28 @@ func TestLoadRepoMissingIsDefaults(t *testing.T) {
 		t.Fatalf("defaults = %+v", r)
 	}
 }
+
+func TestPRReactionsAndComment(t *testing.T) {
+	root := t.TempDir()
+	r, _ := LoadRepo(root)
+	if r.PR.OnOpen != "eyes" || r.PR.OnGreen != "+1" || !r.PR.ReactionsOn() {
+		t.Fatalf("defaults = %+v", r.PR)
+	}
+	os.WriteFile(filepath.Join(root, RepoFile), []byte(`
+[pr]
+on_open = ""
+on_green = "rocket"
+comment = "lgtm: {found} found, {fixed} fixed"
+`), 0o644)
+	r, err := LoadRepo(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.PR.OnOpen != "" || r.PR.OnGreen != "rocket" || r.PR.Comment == "" {
+		t.Fatalf("custom = %+v", r.PR)
+	}
+	os.WriteFile(filepath.Join(root, RepoFile), []byte("[pr]\non_green = \"thumbs\"\n"), 0o644)
+	if _, err := LoadRepo(root); err == nil {
+		t.Fatal("unknown reaction accepted")
+	}
+}

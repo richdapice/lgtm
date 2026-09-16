@@ -103,3 +103,9 @@ func (c Client) React(ctx context.Context, owner, repo string, number int, conte
 		"-f", "content="+content)
 	return err
 }
+
+// Comment posts a comment on the PR, body on stdin.
+func (c Client) Comment(ctx context.Context, number int, body string) error {
+	_, err := c.run(ctx, []byte(body), "pr", "comment", fmt.Sprint(number), "--body-file", "-")
+	return err
+}

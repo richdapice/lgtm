@@ -41,6 +41,7 @@ type Agent struct {
 // Repo is .lgtm.toml at the repository root.
 type Repo struct {
 	Settings Settings        `toml:"lgtm"`
+	PR       PR              `toml:"pr"`
 	Lenses   map[string]Lens `toml:"lens"`
 	Projects []Project       `toml:"project"`
 }
@@ -63,12 +64,32 @@ type Settings struct {
 	// well beyond the diff, which is where quality comes from and where cost
 	// goes; this is the knob. 0 = uncapped.
 	MaxBudgetUSD float64 `toml:"max_budget_usd,omitempty"`
-	// Reactions: 👀 on the PR when the run has it, 👍 when CI goes green.
-	// The two reactions every PR gets anyway, from the account running lgtm.
-	Reactions *bool `toml:"reactions,omitempty"` // nil = on
 }
 
-func (s Settings) ReactionsOn() bool { return s.Reactions == nil || *s.Reactions }
+// PR is what lgtm leaves on the pull request. Reactions are GitHub's fixed
+// set; the comment is yours, with a few placeholders expanded.
+type PR struct {
+	Reactions *bool  `toml:"reactions"` // nil = on
+	OnOpen    string `toml:"on_open"`   // reaction when the PR opens; "" = none
+	OnGreen   string `toml:"on_green"`  // reaction when CI is green; "" = none
+	// Comment is posted once the run is through, when set. Placeholders:
+	// {found} {fixed} {accepted} {filed} {rounds} {cost} {branch} {url}
+	Comment string `toml:"comment"`
+}
+
+// GitHub's reaction names, the only ones the API accepts.
+var reactionNames = map[string]bool{"+1": true, "-1": true, "laugh": true, "confused": true, "heart": true, "hooray": true, "rocket": true, "eyes": true}
+
+func (p PR) ReactionsOn() bool { return p.Reactions == nil || *p.Reactions }
+
+func (p PR) validate() error {
+	for _, r := range []string{p.OnOpen, p.OnGreen} {
+		if r != "" && !reactionNames[r] {
+			return fmt.Errorf("config: [pr] reaction %q is not one GitHub knows (+1 -1 laugh confused heart hooray rocket eyes)", r)
+		}
+	}
+	return nil
+}
 
 type Lens struct {
 	Model   string `toml:"model"`
@@ -171,6 +192,15 @@ func LoadRepo(root string) (*Repo, error) {
 	if r.Settings.Dispatch == "" {
 		r.Settings.Dispatch = "batch"
 	}
+	if _, set := rawKeys(root, "pr", "on_open"); !set {
+		r.PR.OnOpen = "eyes"
+	}
+	if _, set := rawKeys(root, "pr", "on_green"); !set {
+		r.PR.OnGreen = "+1"
+	}
+	if err := r.PR.validate(); err != nil {
+		return nil, err
+	}
 	if len(r.Settings.Passes) == 0 {
 		r.Settings.Passes = []string{""} // one pass on the agent's default model
 	}
@@ -257,4 +287,19 @@ func sortStrings(s []string) {
 			s[j], s[j-1] = s[j-1], s[j]
 		}
 	}
+}
+
+// rawKeys reports whether a key was present in the file at all, so an explicit
+// on_open = "" can mean "no reaction" while an absent key means the default.
+func rawKeys(root, table, key string) (string, bool) {
+	var raw map[string]map[string]any
+	if _, err := toml.DecodeFile(filepath.Join(root, RepoFile), &raw); err != nil {
+		return "", false
+	}
+	v, ok := raw[table][key]
+	if !ok {
+		return "", false
+	}
+	s, _ := v.(string)
+	return s, true
 }
