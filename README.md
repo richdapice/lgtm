@@ -24,7 +24,7 @@ You need `git`, `gh` logged in, and `claude` on your PATH (or another agent; see
 1. **check.** Your own test and lint commands run on the files your branch changed, before a single token is spent. A diff that doesn't pass its own checks is sent back, not reviewed.
 2. **review.** Four lenses read the diff between your branch and its base: correctness, your project's conventions (from `CLAUDE.md` / `AGENTS.md`), security, tests. The agent can read the rest of the repo while it thinks; that's where the good findings come from.
 3. **fix.** The agent edits your working tree. (In manual mode there's a **decide** gate first, where it asks you.)
-4. **check** again, on the files it touched. A fix that fails is reverted, not committed.
+4. **recheck.** The same checks again, on the files it touched. A fix that fails them is reverted, not committed.
 5. **verify.** Each fix is confirmed against the new diff. Anything still open goes around again, up to `max_fix_rounds`. The list of findings only ever gets shorter, so this always ends.
 6. **pr, ci.** It pushes, writes the PR body from the diff and the literal check output, opens the PR, reacts 👀, watches CI, reacts 👍.
 
@@ -35,7 +35,7 @@ You need `git`, `gh` logged in, and `claude` on your PATH (or another agent; see
    ✓ check     your checks, on the diff
    ✓ review    4 lenses · 7 found
    ⠋ fix       agent working on 3 finding(s)
-   ○ check
+   ○ recheck
    ○ verify
    ○ pr
    ○ ci
@@ -145,10 +145,10 @@ With `dispatch = "parallel"` there's a bar per lens, and with `passes` a bar per
       ╰ tests        ██████▎░░░░░░     –   sonnet  1m04s
 ```
 
-**After the review.** The gate track replaces the bars (✓ passed · ∴ now · ○ ahead), with the loop row under it. `check` appears twice on purpose: once on your diff before the review, once per fix round. `decide` shows only in manual mode.
+**After the review.** The gate track replaces the bars (✓ passed · ∴ now · ○ ahead), with the loop row under it. `recheck` is the same commands as `check`, run on what the fixer touched. `decide` shows only in manual mode.
 
 ```
-gates ✓ check ─ ✓ review ─ ✓ fix ─ ✓ check ─ ∴ verify ─ ○ pr ─ ○ ci
+gates ✓ check ─ ✓ review ─ ✓ fix ─ ✓ recheck ─ ∴ verify ─ ○ pr ─ ○ ci
  loop ● ● ○  round 2/3      2 open · 5 fixed · 0 filed
 ```
 

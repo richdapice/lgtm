@@ -87,7 +87,7 @@ func TestProgressFrame(t *testing.T) {
 	if os.Getenv("SHOW") != "" {
 		fmt.Println(out)
 	}
-	for _, want := range []string{"GATES", "✓ check", "✓ review", "✓ decide", "fix       agent working", "○ check", "○ verify", "○ pr", "ROUNDS", "round 1: 3 fixed"} {
+	for _, want := range []string{"GATES", "✓ check", "✓ review", "✓ decide", "fix       agent working", "○ recheck", "○ verify", "○ pr", "ROUNDS", "round 1: 3 fixed"} {
 		if !contains(out, want) {
 			t.Errorf("frame missing %q\n%s", want, out)
 		}

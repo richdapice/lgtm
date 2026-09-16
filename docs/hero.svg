@@ -89,7 +89,7 @@
         <circle id="g0" class="anim" cx="72" cy="248" r="5"/><text id="l0" class="anim" x="83" y="252">check</text>
         <circle id="g1" class="anim" cx="150" cy="248" r="5"/><text id="l1" class="anim" x="161" y="252">review</text>
         <circle id="g2" class="anim" cx="228" cy="248" r="5"/><text id="l2" class="anim" x="239" y="252">fix</text>
-        <circle id="g3" class="anim" cx="306" cy="248" r="5"/><text id="l3" class="anim" x="317" y="252">check</text>
+        <circle id="g3" class="anim" cx="306" cy="248" r="5"/><text id="l3" class="anim" x="317" y="252">recheck</text>
         <circle id="g4" class="anim" cx="384" cy="248" r="5"/><text id="l4" class="anim" x="395" y="252">verify</text>
         <circle id="g5" class="anim" cx="462" cy="248" r="5"/><text id="l5" class="anim" x="473" y="252">pr</text>
         <circle id="g6" class="anim" cx="540" cy="248" r="5"/><text id="l6" class="anim" x="551" y="252">ci</text>

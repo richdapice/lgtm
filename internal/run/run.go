@@ -78,7 +78,7 @@ type Gate struct{ ID, Label string }
 // Gates is the track, in order. The decide→fix→check→verify stretch repeats.
 var Gates = []Gate{
 	{"floor", "check"}, {"review", "review"}, {"decide", "decide"},
-	{"fix", "fix"}, {"check", "check"}, {"verify", "verify"}, {"pr", "pr"}, {"ci", "ci"},
+	{"fix", "fix"}, {"check", "recheck"}, {"verify", "verify"}, {"pr", "pr"}, {"ci", "ci"},
 }
 
 // VisibleGates drops decide on autopilot, where it never happens.
