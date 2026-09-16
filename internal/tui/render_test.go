@@ -93,26 +93,3 @@ func TestProgressFrame(t *testing.T) {
 		}
 	}
 }
-
-func TestSplashFrame(t *testing.T) {
-	lipgloss.SetColorProfile(termenv.Ascii)
-	m := newModel(context.Background(), func() {})
-	m.width = 96
-	m.run = run.Run{Branch: "b", Base: "main", Step: "review", StepNote: "4 lenses",
-		Lenses: []run.Lens{{Name: "review", State: run.Running}}}
-	m.frame = 40 // settled
-	out := m.View()
-	if os.Getenv("SHOW") != "" {
-		fmt.Println(out)
-	}
-	for _, want := range []string{"███████╗", "review · 4 lenses", "q cancel"} {
-		if !contains(out, want) {
-			t.Errorf("splash missing %q\n%s", want, out)
-		}
-	}
-	m.frame = 2 // hovering, hollow: the ink cells are ░, the outline is intact
-	hov := m.View()
-	if contains(hov, "██╗") || !contains(hov, "░░╗") {
-		t.Errorf("hover frame should be hollow:\n%s", hov)
-	}
-}

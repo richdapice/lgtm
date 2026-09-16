@@ -287,8 +287,6 @@ func (m *model) View() string {
 	var b strings.Builder
 	b.WriteString(" " + m.header() + "\n")
 	switch {
-	case m.pending == nil && m.run.Step == "review" && !m.run.Findings.Closed:
-		b.WriteString(m.splash())
 	case m.pending == nil:
 		b.WriteString(m.progress())
 	default:
