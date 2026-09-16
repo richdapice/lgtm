@@ -23,13 +23,14 @@ var lgtmMark = []string{
 }
 
 var (
-	inkFull  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.AdaptiveColor{Light: "#1a7f37", Dark: "#3fb950"})
-	inkThin  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.AdaptiveColor{Light: "#2da44e", Dark: "#2ea043"})
-	inkEdge  = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#1a7f37", Dark: "#238636"})
+	// stamp-pad blue: the office kind, and the app's accent, so it belongs
+	inkFull  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.AdaptiveColor{Light: "#0969da", Dark: "#58a6ff"})
+	inkThin  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.AdaptiveColor{Light: "#2f7fd6", Dark: "#3d8bd9"})
+	inkEdge  = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#0969da", Dark: "#2f6fb5"})
 	hollow   = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#9ca3af", Dark: "#3d4450"})
 	flash    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.AdaptiveColor{Light: "#1f2328", Dark: "#f0f6fc"})
-	bleedHi  = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#1a7f37", Dark: "#2ea043"})
-	bleedLo  = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#6b7280", Dark: "#1b4d27"})
+	bleedHi  = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#0969da", Dark: "#3d8bd9"})
+	bleedLo  = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#6b7280", Dark: "#1e3f66"})
 	stampDim = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#6b7280", Dark: "#8b949e"})
 )
 
