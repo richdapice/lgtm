@@ -78,7 +78,11 @@ prompt = "hot paths doing more work than they need to; N+1 queries; work inside 
 prompt = "interactive elements without labels, color used as the only signal, focus order that doesn't follow the layout"
 ```
 
-Turn a built-in off with `enabled = false`, rewrite its prompt the same way, or put one on a cheaper model. By default all lenses ride in one agent call; `dispatch = "parallel"` gives each its own, and `passes = ["sonnet", "opus"]` reviews the whole diff twice with a stronger second read. Details in [Configuration](docs/configuration.md#the-review).
+Turn a built-in off with `enabled = false`, rewrite its prompt the same way, or put one on a cheaper model. By default all lenses ride in one agent call. With `dispatch = "parallel"` each gets its own, at once, and the bar shows them racing:
+
+![the status bar with the four lenses running in parallel](docs/bar-parallel.gif)
+
+`passes = ["sonnet", "opus"]` reviews the whole diff twice, with a stronger second read. Details in [Configuration](docs/configuration.md#the-review).
 
 ## Three ways to run it
 
