@@ -143,6 +143,7 @@ func Prompt(in io.Reader, out io.Writer, d Detected, yes bool) config.Repo {
 		fmt.Fprintf(out, "\n%s\n", p.Path)
 		p.Test = ask("test", p.Test)
 		p.Lint = ask("lint", p.Lint)
+		p.Suite = ask("suite (slow; once before the PR)", p.Suite)
 	}
 	fmt.Fprintln(out)
 	r.Settings.Mode = ask("mode (manual|auto)", r.Settings.Mode)

@@ -45,6 +45,7 @@ type Options struct {
 	Intent string
 	Draft  bool
 	NoPR   bool // review only; skip push/PR/CI
+	Suite  bool // run each project's slow suite once before pushing, even with NoPR (lgtm push)
 	In     io.Reader
 	Out    io.Writer
 	Log    *log.Logger
@@ -72,6 +73,7 @@ type Ceremony struct {
 	conventions                                          string
 	dismiss                                              *finding.DismissList
 	prompts                                              map[string]string // per lens
+	suiteText                                            string
 
 	run *run.Run
 	mu  sync.Mutex
@@ -105,6 +107,14 @@ func (c *Ceremony) Run(ctx context.Context) error {
 		c.printHeld()
 		return ErrHeld
 	}
+	if c.o.NoPR && !c.o.Suite {
+		if err := c.finish(run.Done); err != nil {
+			return err
+		}
+		c.stamp()
+		return nil
+	}
+	c.suite(ctx)
 	if c.o.NoPR {
 		if err := c.finish(run.Done); err != nil {
 			return err
@@ -302,6 +312,31 @@ func (c *Ceremony) refreshDiff(ctx context.Context) error {
 	c.changed, err = gitx.ChangedFiles(ctx, c.root, c.mergeBase, "HEAD", ownFiles...)
 	return err
 }
+
+// suite runs the slow, whole-project test command once, after the fix rounds
+// and before anything is pushed. Its verdict goes on the run: a failing suite
+// opens the PR as a draft, and lgtm push refuses to push.
+func (c *Ceremony) suite(ctx context.Context) {
+	checks := project.PlanSuite(c.repo, c.changed)
+	if len(checks) == 0 {
+		return
+	}
+	c.step("pr", "running the suite")
+	rs := project.Run(ctx, c.root, checks)
+	ok, _ := project.AllOK(rs)
+	c.run.SuiteOK = &ok
+	c.suiteText = checksText(rs)
+	if ok {
+		c.println("suite: green")
+	} else {
+		c.println("suite: failed")
+		c.println("%s", c.suiteText)
+	}
+	c.save()
+}
+
+// SuiteFailed reports whether a configured suite ran and failed.
+func (c *Ceremony) SuiteFailed() bool { return c.run.SuiteOK != nil && !*c.run.SuiteOK }
 
 // checkable drops files the config says never trigger checks.
 func (c *Ceremony) checkable(files []string) []string {
@@ -743,7 +778,7 @@ func (c *Ceremony) openPR(ctx context.Context) error {
 			filed = append(filed, f)
 		}
 	}
-	res, err := c.reviewer.Ask(ctx, lens.BuildPRPrompt(c.intent, c.diff, checksText(checks), fixed, filed), nil)
+	res, err := c.reviewer.Ask(ctx, lens.BuildPRPrompt(c.intent, c.diff, checksText(checks)+c.suiteText, fixed, filed), nil)
 	c.addCost(res.CostUSD)
 	c.logCall("pr", res)
 	if err != nil {
@@ -761,6 +796,10 @@ func (c *Ceremony) openPR(ctx context.Context) error {
 	if c.unfixedBlock() {
 		draft = true
 		c.println("a block finding shipped unfixed — opening as a draft")
+	}
+	if c.SuiteFailed() {
+		draft = true
+		c.println("the suite failed — opening as a draft")
 	}
 	n, url, err := c.gh.CreatePR(ctx, c.base, c.branch, title, body, draft)
 	if err != nil {

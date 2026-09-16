@@ -235,7 +235,14 @@ lint = "npm run typecheck"
 path = "."
 test = "npx vitest related {files} --run"    # {files} = the changed paths, relative to the project
 lint = "npm run typecheck && npx eslint {files}"
+
+[[project]]              # a native app: nothing fast enough to run at every gate
+path = "ios"
+lint = "swiftlint lint --strict"
+suite = "xcodebuild test -scheme App -destination 'platform=iOS Simulator,name=iPhone 16' -quiet"
 ```
+
+`test` and `lint` run at every check. `suite` is for the slow whole-project run that can't be scoped to changed files: it runs once, after the fix rounds and before anything is pushed. A failed suite opens the PR as a draft with the output in the body, and `lgtm push` refuses to push.
 
 `init` detects these from `package.json`, `go.mod`, `pyproject.toml`, and `Cargo.toml`, two levels deep. These commands are the floor: they run on your diff before the review and on every fix after it. A fix round that no check validated is not committed.
 

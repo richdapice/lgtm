@@ -113,6 +113,10 @@ type Project struct {
 	Path string `toml:"path"`
 	Test string `toml:"test"` // {files} expands to the changed paths in this project
 	Lint string `toml:"lint"`
+	// Suite is the slow one: the whole test run, for projects whose tests
+	// can't be scoped to changed files. It runs once, before the PR opens,
+	// never at the floor or in a fix round.
+	Suite string `toml:"suite,omitempty"`
 }
 
 const RepoFile = ".lgtm.toml"

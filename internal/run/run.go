@@ -133,6 +133,8 @@ type Run struct {
 	StepNote string `json:"step_note,omitempty"`
 	// Rounds is one summary per finished decide→fix→check→verify cycle.
 	Rounds []RoundSummary `json:"rounds,omitempty"`
+	// SuiteOK is the slow suite's verdict, when a project has one: nil = not run.
+	SuiteOK *bool `json:"suite_ok,omitempty"`
 	// Decisions recorded by `lgtm decide` while held, consumed by `lgtm continue`.
 	Decisions map[string]string `json:"decisions,omitempty"`
 }

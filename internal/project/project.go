@@ -152,3 +152,19 @@ func AllOK(rs []Result) (ok bool, skipped int) {
 	}
 	return ok, skipped
 }
+
+// PlanSuite is one check per project that has a suite command, regardless of
+// which files changed: the suite is whole-project by definition.
+func PlanSuite(cfg *config.Repo, changed []string) []Check {
+	seen := map[string]bool{}
+	var checks []Check
+	for _, f := range changed {
+		p := cfg.ProjectFor(f)
+		if p.Suite == "" || seen[p.Path] {
+			continue
+		}
+		seen[p.Path] = true
+		checks = append(checks, Check{Project: p.Path, Kind: "suite", Command: p.Suite})
+	}
+	return checks
+}

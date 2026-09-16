@@ -543,11 +543,18 @@ func cmdPush(ctx context.Context, args []string, logger *log.Logger) error {
 	if run.Reviewed(common, tree) {
 		fmt.Printf("%s already reviewed\n", b)
 	} else {
-		err := ceremony.Run(ctx, ceremony.Options{Dir: root, NoPR: true, Manual: *manual, Log: logger})
+		c, err := ceremony.Prepare(ctx, ceremony.Options{Dir: root, NoPR: true, Suite: true, Manual: *manual, Log: logger})
 		if errors.Is(err, ceremony.ErrOnBase) {
 			// nothing to review on the base branch; just push
 		} else if err != nil {
 			return err
+		} else {
+			if err := c.Run(ctx); err != nil {
+				return err
+			}
+			if c.SuiteFailed() {
+				return errors.New("the suite failed; not pushing")
+			}
 		}
 	}
 	// the hook would run again here and short-circuit on the reviewed tree;
