@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -21,6 +22,9 @@ import (
 type Detected struct {
 	Projects []config.Project
 	Notes    []string
+	// Hints are example commands for what the repo looks like, shown when we
+	// recognize the project type but won't guess its commands (Xcode, Gradle).
+	Hints []string
 }
 
 var skipDirs = map[string]bool{
@@ -59,10 +63,40 @@ func Detect(root string) Detected {
 	rootP, ok := detectDir(root, ".")
 	if !ok {
 		rootP = config.Project{Path: "."}
-		d.Notes = append(d.Notes, "no package.json / go.mod / pyproject.toml / Cargo.toml at the root; set commands by hand")
+		d.Hints = hints(root)
+		if len(d.Hints) == 0 {
+			d.Notes = append(d.Notes, "couldn't tell what kind of project this is; commands are yours to set")
+		}
 	}
 	d.Projects = append(d.Projects, rootP)
 	return d
+}
+
+// hints recognizes project types we deliberately don't write commands for
+// (the right command depends on a scheme, a module, a simulator) and offers
+// the shape of one instead.
+func hints(root string) []string {
+	var h []string
+	has := func(glob string) bool { m, _ := filepath.Glob(filepath.Join(root, glob)); return len(m) > 0 }
+	switch {
+	case has("*.xcodeproj") || has("*.xcworkspace"):
+		scheme := "<Scheme>"
+		if m, _ := filepath.Glob(filepath.Join(root, "*.xcodeproj")); len(m) > 0 {
+			scheme = strings.TrimSuffix(filepath.Base(m[0]), ".xcodeproj") // the usual default scheme
+		}
+		h = append(h,
+			"Xcode project. Likely commands:",
+			`  lint   swiftlint lint --strict`,
+			`  test   (leave empty unless you have a fast unit target)`,
+			`  suite  xcodebuild test -scheme `+scheme+` -destination 'platform=iOS Simulator,name=iPhone 16' -quiet`)
+	case has("Package.swift"):
+		h = append(h, "Swift package. Likely commands:", `  lint   swiftlint lint --strict`, `  test   swift test`)
+	case has("build.gradle") || has("build.gradle.kts") || has("settings.gradle*"):
+		h = append(h, "Gradle project. Likely commands:", `  lint   ./gradlew lint`, `  test   ./gradlew testDebugUnitTest`, `  suite  ./gradlew test`)
+	case has("Makefile"):
+		h = append(h, "There's a Makefile. Likely commands:", `  test   make test`, `  lint   make lint`)
+	}
+	return h
 }
 
 func detectDir(dir, rel string) (config.Project, bool) {
@@ -111,8 +145,11 @@ func detectDir(dir, rel string) (config.Project, bool) {
 	return p, false
 }
 
-// Prompt confirms each detected command. Enter keeps the default, "-" clears
-// it, anything else replaces it. yes skips the questions entirely.
+// Prompt asks as little as it can. Detected commands get one yes/no. Only a
+// project we couldn't read gets asked field by field, with hints for what the
+// repo looks like, and a command that isn't on your PATH is questioned before
+// it's written. Mode, rounds, and dispatch keep their defaults; the file says
+// how to change them.
 func Prompt(in io.Reader, out io.Writer, d Detected, yes bool) config.Repo {
 	r := config.Repo{
 		Settings: config.Settings{Mode: "auto", MaxFixRounds: 3, Dispatch: "batch"},
@@ -137,19 +174,111 @@ func Prompt(in io.Reader, out io.Writer, d Detected, yes bool) config.Repo {
 		}
 		return line
 	}
-	fmt.Fprintf(out, "%d project(s) detected. Enter keeps the default, - clears it.\n", len(r.Projects))
-	for i := range r.Projects {
-		p := &r.Projects[i]
-		fmt.Fprintf(out, "\n%s\n", p.Path)
-		p.Test = ask("test", p.Test)
-		p.Lint = ask("lint", p.Lint)
-		p.Suite = ask("suite (slow; once before the PR)", p.Suite)
+	confirm := func(q string, def bool) bool {
+		d := "y/N"
+		if def {
+			d = "Y/n"
+		}
+		fmt.Fprintf(out, "  %s [%s]: ", q, d)
+		line, _ := rd.ReadString('\n')
+		switch strings.ToLower(strings.TrimSpace(line)) {
+		case "y", "yes":
+			return true
+		case "n", "no":
+			return false
+		}
+		return def
 	}
-	fmt.Fprintln(out)
-	r.Settings.Mode = ask("mode (manual|auto)", r.Settings.Mode)
-	fmt.Sscanf(ask("max fix rounds", "3"), "%d", &r.Settings.MaxFixRounds)
-	r.Settings.Dispatch = ask("dispatch (batch|parallel)", r.Settings.Dispatch)
+	// a command whose program isn't on PATH is probably a typo; say so
+	askCmd := func(label, def string) string {
+		for {
+			v := ask(label, def)
+			if v == "" || commandExists(v) {
+				return v
+			}
+			fmt.Fprintf(out, "  %q isn't on your PATH.", firstWord(v))
+			if confirm(" use it anyway?", false) {
+				return v
+			}
+		}
+	}
+
+	detected, blank := 0, 0
+	for _, p := range r.Projects {
+		if p.Test != "" || p.Lint != "" {
+			detected++
+		} else {
+			blank++
+		}
+	}
+	if detected > 0 {
+		fmt.Fprintf(out, "found %d project(s):\n", detected)
+		for _, p := range r.Projects {
+			if p.Test == "" && p.Lint == "" {
+				continue
+			}
+			fmt.Fprintf(out, "  %-12s test: %s\n  %-12s lint: %s\n", p.Path, orNone(p.Test), "", orNone(p.Lint))
+		}
+		if !confirm("keep these?", true) {
+			for i := range r.Projects {
+				p := &r.Projects[i]
+				if p.Test == "" && p.Lint == "" {
+					continue
+				}
+				fmt.Fprintf(out, "\n%s  (Enter keeps, - clears)\n", p.Path)
+				p.Test = askCmd("test", p.Test)
+				p.Lint = askCmd("lint", p.Lint)
+			}
+		}
+	}
+	if blank > 0 {
+		for _, h := range d.Hints {
+			fmt.Fprintln(out, h)
+		}
+		fmt.Fprintln(out, "Commands run on the changed files; {files} expands to them. Empty means skipped (never counted as a pass).")
+		for i := range r.Projects {
+			p := &r.Projects[i]
+			if p.Test != "" || p.Lint != "" {
+				continue
+			}
+			fmt.Fprintf(out, "\n%s\n", p.Path)
+			p.Lint = askCmd("lint  (fast; every check)", p.Lint)
+			p.Test = askCmd("test  (fast; every check)", p.Test)
+			p.Suite = askCmd("suite (slow; once, before the PR)", p.Suite)
+		}
+	}
+	fmt.Fprintln(out, "\nautopilot, 3 fix rounds, one review call. Change any of it in .lgtm.toml.")
 	return r
+}
+
+func orNone(s string) string {
+	if s == "" {
+		return "(none)"
+	}
+	return s
+}
+
+func firstWord(cmd string) string {
+	f := strings.Fields(cmd)
+	if len(f) == 0 {
+		return ""
+	}
+	return f[0]
+}
+
+// commandExists checks the first word: on PATH, or a path that exists
+// (./gradlew, ./scripts/test.sh). Anything after && is not checked.
+func commandExists(cmd string) bool {
+	w := firstWord(cmd)
+	if w == "" {
+		return true
+	}
+	if strings.ContainsAny(w, "/") {
+		_, err := os.Stat(w)
+		return err == nil
+	}
+	_, err := exec.LookPath(w)
+	return err == nil
 }
 
 // Write emits .lgtm.toml with a header explaining the two things people edit.

@@ -35,24 +35,45 @@ func TestDetectMonorepo(t *testing.T) {
 	}
 }
 
-func TestPromptAndWriteRoundTrip(t *testing.T) {
+func TestPromptDetectedIsOneQuestion(t *testing.T) {
 	root := t.TempDir()
 	d := Detected{Projects: []config.Project{{Path: ".", Test: "go test ./...", Lint: "go vet ./..."}}}
-	in := strings.NewReader("\n-\n\nauto\n2\n\n")
 	var out strings.Builder
-	r := Prompt(in, &out, d, false)
-	if r.Projects[0].Test != "go test ./..." || r.Projects[0].Lint != "" || r.Settings.Mode != "auto" || r.Settings.MaxFixRounds != 2 || r.Settings.Dispatch != "batch" {
-		t.Fatalf("prompted = %+v", r)
+	r := Prompt(strings.NewReader("\n"), &out, d, false) // Enter = keep
+	if r.Projects[0].Test != "go test ./..." || r.Settings.Mode != "auto" || r.Settings.MaxFixRounds != 3 {
+		t.Fatalf("kept = %+v", r)
+	}
+	if strings.Contains(out.String(), "mode (") {
+		t.Fatal("asked about mode; defaults should not be questions")
 	}
 	if err := Write(root, r); err != nil {
 		t.Fatal(err)
 	}
-	back, err := config.LoadRepo(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if back.Settings.Mode != "auto" || back.Settings.MaxFixRounds != 2 || back.Projects[0].Test != "go test ./..." {
+	back, _ := config.LoadRepo(root)
+	if back.Projects[0].Test != "go test ./..." {
 		t.Fatalf("round trip = %+v", back)
+	}
+}
+
+func TestPromptBlankProjectValidatesCommands(t *testing.T) {
+	d := Detected{Projects: []config.Project{{Path: "."}}, Hints: []string{"Xcode project. Likely commands:"}}
+	var out strings.Builder
+	// lint: "iij" (not on PATH) -> use anyway? n -> then "true" (on PATH); test: empty; suite: empty
+	r := Prompt(strings.NewReader("iij\nn\ntrue\n\n\n"), &out, d, false)
+	if r.Projects[0].Lint != "true" || r.Projects[0].Test != "" {
+		t.Fatalf("got %+v", r.Projects[0])
+	}
+	if !strings.Contains(out.String(), "Xcode project") || !strings.Contains(out.String(), `"iij" isn't on your PATH`) {
+		t.Fatalf("prompt output:\n%s", out.String())
+	}
+}
+
+func TestHintsRecognizeXcode(t *testing.T) {
+	root := t.TempDir()
+	os.MkdirAll(filepath.Join(root, "App.xcodeproj"), 0o755)
+	d := Detect(root)
+	if len(d.Hints) == 0 || !strings.Contains(d.Hints[0], "Xcode") {
+		t.Fatalf("hints = %v", d.Hints)
 	}
 }
 
