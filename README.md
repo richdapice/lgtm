@@ -4,7 +4,15 @@
 
 <p align="center"><img src="docs/hero.svg" alt="a pull request gets reviewed, fixed, and stamped LGTM" width="960"></p>
 
-You already run the tests before you push. What you don't have is someone who *read the change*. `lgtm` is that reader: it reviews your branch the way a careful colleague would, fixes what it finds, proves each fix against your own checks, and opens the pull request. On autopilot it never asks you anything. It uses the coding agent you already pay for.
+Most of the code in a branch today was written by an AI, and it needs a harder review than human code, not a softer one. It compiles, it looks clean, and it hides things:
+
+- AI-assisted pull requests carry **1.7× the defects** of human-only ones; logic and control-flow mistakes are 75% more frequent. ([CodeRabbit](https://www.coderabbit.ai/blog/state-of-ai-vs-human-code-generation-report))
+- **44%** of AI code-generation tasks introduce a known vulnerability. ([Veracode, 2026](https://www.veracode.com/blog/2026-genai-code-security-report-ai-risk/))
+- Swallowed exceptions and empty catch blocks are up **47%**: code that fails silently instead of loudly. ([GitClear](https://www.gitclear.com/the_ai_code_quality_maintainability_gap))
+
+84% of developers use AI tools; 29% trust what they produce. ([source](https://interclypse.com/happenings/the-ai-trust-gap-what-developers-actually-believe-about-ai-code)) The gap is a review nobody has time to do.
+
+`lgtm` does that review, on every branch, before the PR exists. Four lenses read the diff the way a careful colleague would. What they find gets fixed, and because the fixer is an AI too, nothing it writes is trusted either: every fix runs through your own tests and lint before it's committed, and a fix that fails is thrown away. Then it opens the pull request. On autopilot it never asks you anything.
 
 ```sh
 go install github.com/richdapice/lgtm@latest
