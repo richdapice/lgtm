@@ -25,7 +25,7 @@ Needs `git`, `gh` (logged in), and `claude` on your PATH.
 
 **The PR, opened.** Pushed, body written from the diff and the literal check output, 👀 reacted, CI watched, 👍 when it's green.
 
-**A live status bar in Claude Code**, in every session, showing which gate every run is at.
+**Claude Code, wired in.** A live status bar in every session, and a `/lgtm` skill so a held run can be worked from any chat.
 
 ## What happens when you run `lgtm`
 
@@ -63,17 +63,21 @@ Eight gates. `check` is your commands on your diff. `review` is the agent readin
 | `lgtm --manual` | The same, but it asks you about each finding in a panel. |
 | `lgtm push` | Review and fix, then `git push`. No PR. |
 
-Everything else, including acting on a run from any terminal or from a Claude Code chat with `/lgtm`, is in [Commands](docs/commands.md).
+Everything else is in [Commands](docs/commands.md).
 
-## The status bar
+## Inside Claude Code
 
 ```sh
-lgtm init --statusline
+lgtm init --statusline --skill      # once; applies to every repo
 ```
+
+**The status bar.** Every Claude Code session shows the gate track and the rounds of every run in the repo, live, in about four milliseconds.
 
 ![the status bar mid-run](docs/bar.png)
 
-Four milliseconds to render, every Claude Code session, the gate track and the rounds as they happen. Every row explained in [The status bar](docs/status-bar.md).
+**The `/lgtm` skill.** Type `/lgtm` in any chat and Claude tells you what's waiting on a held run, records what you say ("accept the first, fix the second"), and continues it. No terminal, no finding the right worktree. It drives `lgtm decide` and `lgtm continue` underneath, which you can also run yourself from anywhere with `-b BRANCH`.
+
+Every row of the bar is explained in [The status bar](docs/status-bar.md); the commands the skill uses are in [Commands](docs/commands.md).
 
 ## Make it yours
 
