@@ -76,12 +76,20 @@ func PrePush(ctx context.Context, dir string, stdin io.Reader, out io.Writer, lo
 		fmt.Fprintf(out, "lgtm: %s already reviewed\n", branch)
 		return 0
 	}
+	// prepare first: it's cheap, and "on the base branch" should pass through
+	// without announcing a review that isn't going to happen
+	c, err := ceremony.Prepare(ctx, ceremony.Options{Dir: root, NoPR: true, Out: out, In: os.Stdin, Log: logger})
+	if errors.Is(err, ceremony.ErrOnBase) {
+		return 0
+	}
+	if err != nil {
+		fmt.Fprintln(out, "lgtm:", err)
+		return 1
+	}
 	fmt.Fprintf(out, "lgtm: reviewing %s before it leaves\n", branch)
-	err = ceremony.Run(ctx, ceremony.Options{Dir: root, NoPR: true, Out: out, In: os.Stdin, Log: logger})
+	err = c.Run(ctx)
 	after, _ := gitx.Run(ctx, root, "rev-parse", "HEAD")
 	switch {
-	case errors.Is(err, ceremony.ErrOnBase):
-		return 0
 	case errors.Is(err, ceremony.ErrHeld):
 		fmt.Fprintln(out, "lgtm: findings need you — push held. `lgtm` to decide, or git push --no-verify.")
 		return 2
