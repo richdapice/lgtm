@@ -93,7 +93,10 @@ func main() {
 			fs.Parse(args[1:])
 			err = tui.DemoBar(ctx, tui.DemoBarOptions{Parallel: *par, Passes: *passes})
 		} else {
-			err = tui.Demo(ctx)
+			fs := flag.NewFlagSet("demo", flag.ExitOnError)
+			auto := fs.Bool("auto", false, "the run on autopilot: no panel, nobody asked")
+			fs.Parse(args)
+			err = tui.Demo(ctx, *auto)
 		}
 	case "init":
 		err = cmdInit(ctx, args)
@@ -160,7 +163,7 @@ SETUP
   lgtm doctor                  check each configured agent answers
 
 SEE IT
-  lgtm demo                    a scripted run in the real panel; no agent, no repo
+  lgtm demo [--auto]           a scripted run in the real panel; no agent, no repo
   lgtm demo bar                the status bar through a scripted run
     --parallel                 one bar per lens (dispatch = "parallel")
     --passes N                 N review rows in sequence

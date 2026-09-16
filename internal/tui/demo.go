@@ -38,7 +38,7 @@ diff --git a/src/main/sync.test.ts b/src/main/sync.test.ts
 // Demo drives the real panel with a scripted run: the gates, a decision, a
 // fix round, the stamp. No agent, no repo. It exists so the screen can be
 // looked at, screenshotted, and recorded without spending anything.
-func Demo(ctx context.Context) error {
+func Demo(ctx context.Context, auto bool) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	m := newModel(ctx, cancel)
@@ -50,7 +50,11 @@ func Demo(ctx context.Context) error {
 	m.program = p
 
 	go func() {
-		r := run.Run{Branch: "worktree-sync-throttle", Base: "main", Mode: "manual", MaxRounds: 3,
+		mode := "manual"
+		if auto {
+			mode = "auto"
+		}
+		r := run.Run{Branch: "worktree-sync-throttle", Base: "main", Mode: mode, MaxRounds: 3,
 			StartedAt: time.Now(), Phase: run.Discover, Step: "floor", StepNote: "2 changed files",
 			Lenses: []run.Lens{{Name: "review", Model: "opus", State: run.Running, StartedAt: time.Now()}}}
 		tick := func(d time.Duration) bool {
@@ -88,13 +92,22 @@ func Demo(ctx context.Context) error {
 		r.Phase, r.Step, r.StepNote = run.Fix, "decide", "2 waiting on you"
 		send()
 
-		reply := make(chan decideReply, 1)
-		p.Send(decideMsg{open: set.Open(), files: files, reply: reply})
 		var rep decideReply
-		select {
-		case <-ctx.Done():
-			return
-		case rep = <-reply:
+		if auto {
+			// autopilot: everything goes to the fixer, nobody is asked
+			rep = decideReply{decisions: map[string]ceremony.Decision{}, autopilot: true}
+			r.Step, r.StepNote = "fix", ""
+			if !tick(600 * time.Millisecond) {
+				return
+			}
+		} else {
+			reply := make(chan decideReply, 1)
+			p.Send(decideMsg{open: set.Open(), files: files, reply: reply})
+			select {
+			case <-ctx.Done():
+				return
+			case rep = <-reply:
+			}
 		}
 		if rep.quit {
 			p.Send(doneMsg{ceremony.ErrHeld})
