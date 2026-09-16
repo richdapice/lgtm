@@ -1,6 +1,6 @@
 # LGTM
 
-**Fresh eyes on your branch before the PR opens.**
+**Get to LGTM before you open the PR.**
 
 <p align="center"><img src="docs/hero.svg" alt="a pull request gets reviewed, fixed, and stamped LGTM" width="960"></p>
 

@@ -117,7 +117,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Print(`lgtm — fresh eyes on your branch before the PR opens
+	fmt.Print(`lgtm — get to LGTM before you open the PR
 
 USAGE
   lgtm [flags]                 review the current branch, fix what you decide, open the PR
