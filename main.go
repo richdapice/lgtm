@@ -60,6 +60,15 @@ func main() {
 	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
 		cmd, args = args[0], args[1:]
 	}
+	// -h anywhere on a bare `lgtm` is the structured help, not flag's dump
+	if cmd == "" {
+		for _, a := range args {
+			if a == "-h" || a == "--help" || a == "--h" || a == "-help" {
+				usage()
+				return
+			}
+		}
+	}
 	var err error
 	switch cmd {
 	case "", "run":
@@ -158,6 +167,7 @@ FILES
 
 func cmdRun(ctx context.Context, args []string, logger *log.Logger) error {
 	fs := flag.NewFlagSet("lgtm", flag.ExitOnError)
+	fs.Usage = usage
 	auto := fs.Bool("auto", false, "autopilot (the default); --manual to be asked about each finding")
 	manual := fs.Bool("manual", false, "ask about each finding instead of autopilot")
 	branch := fs.String("b", "", "branch (any worktree of this repo)")
