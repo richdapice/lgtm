@@ -311,7 +311,11 @@ func (m *model) header() string {
 		}
 		h += "      " + sYellow.Render(fmt.Sprintf("%d %s a decision", n, word))
 	case r.Phase != "":
-		h += "      " + sAccent.Render(m.spin.View()) + " " + sSubtle.Render(string(r.Phase))
+		label := string(r.Phase)
+		if r.Phase == run.Discover {
+			label = "review"
+		}
+		h += "      " + sAccent.Render(m.spin.View()) + " " + sSubtle.Render(label)
 		if r.Round > 0 {
 			h += sFaint.Render(fmt.Sprintf(" · round %d of %d", r.Round, r.MaxRounds))
 		}
