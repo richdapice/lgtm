@@ -26,9 +26,9 @@
     #f2     { animation-name: find2; }
     #lens   { animation-name: lens; }
     #sweep  { animation-name: sweep; animation-timing-function: ease-in-out; }
-    #stamp  { animation-name: stamp; transform-origin: 700px 150px; animation-timing-function: cubic-bezier(.2,.9,.3,1.2); }
+    #stamp  { animation-name: stamp; transform-origin: 700px 170px; animation-timing-function: cubic-bezier(.2,.9,.3,1.2); }
     #card   { animation-name: shake; }
-    .splat  { animation-name: splat; transform-origin: 700px 150px; }
+    .splat  { animation-name: splat; transform-origin: 700px 170px; }
     #c1 { animation-name: check1 } #c2 { animation-name: check2 } #c3 { animation-name: check3 } #c4 { animation-name: check4 }
     #thumb  { animation-name: thumb; }
     #stage  { animation-name: fade; animation-timing-function: linear; }
@@ -88,22 +88,20 @@
 
     <!-- ink splatter -->
     <g fill="#58a6ff">
-      <circle class="splat anim" cx="612" cy="92" r="4"/>
-      <circle class="splat anim" cx="790" cy="118" r="3"/>
-      <circle class="splat anim" cx="632" cy="206" r="5"/>
-      <circle class="splat anim" cx="812" cy="188" r="4"/>
-      <circle class="splat anim" cx="700" cy="66" r="3"/>
-      <circle class="splat anim" cx="704" cy="238" r="4"/>
+      <circle class="splat anim" cx="612" cy="112" r="4"/>
+      <circle class="splat anim" cx="790" cy="138" r="3"/>
+      <circle class="splat anim" cx="632" cy="226" r="5"/>
+      <circle class="splat anim" cx="812" cy="208" r="4"/>
+      <circle class="splat anim" cx="700" cy="86" r="3"/>
+      <circle class="splat anim" cx="704" cy="258" r="4"/>
     </g>
 
     <!-- the stamp -->
     <g id="stamp" class="anim" filter="url(#rough)">
-      <rect x="586" y="102" width="228" height="96" rx="10" fill="none" stroke="#58a6ff" stroke-width="6"/>
-      <rect x="596" y="112" width="208" height="76" rx="6" fill="none" stroke="#58a6ff" stroke-width="2" opacity=".7"/>
-      <text x="700" y="172" text-anchor="middle" font-size="60" font-weight="800" fill="#58a6ff" letter-spacing="4">LGTM</text>
+      <rect x="586" y="122" width="228" height="96" rx="10" fill="none" stroke="#58a6ff" stroke-width="6"/>
+      <rect x="596" y="132" width="208" height="76" rx="6" fill="none" stroke="#58a6ff" stroke-width="2" opacity=".7"/>
+      <text x="700" y="192" text-anchor="middle" font-size="60" font-weight="800" fill="#58a6ff" letter-spacing="4">LGTM</text>
     </g>
   </g>
 
-  <!-- the line under it, static -->
-  <text x="700" y="290" text-anchor="middle" font-size="15" class="m">fresh eyes on your branch before the PR opens</text>
 </svg>
