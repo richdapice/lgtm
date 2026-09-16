@@ -47,6 +47,8 @@ func TestLoadRepoDefaultsAndRouting(t *testing.T) {
 [lgtm]
 max_fix_rounds = 2
 
+passes = ["sonnet", "opus"]
+
 [lens.security]
 enabled = false
 
@@ -65,6 +67,9 @@ test = "npx vitest related {files} --run"
 	r, err := LoadRepo(root)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if len(r.Settings.Passes) != 2 || r.Settings.Passes[1] != "opus" {
+		t.Fatalf("passes = %v", r.Settings.Passes)
 	}
 	if r.Settings.Mode != "auto" || r.Settings.MaxFixRounds != 2 || r.Settings.Fanout != "single" {
 		t.Fatalf("settings = %+v", r.Settings)
@@ -94,6 +99,9 @@ func TestLoadRepoMissingIsDefaults(t *testing.T) {
 	r, err := LoadRepo(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
+	}
+	if len(r.Settings.Passes) != 1 {
+		t.Fatalf("default passes = %v", r.Settings.Passes)
 	}
 	if len(r.EnabledLenses()) != 4 || len(r.Projects) != 1 {
 		t.Fatalf("defaults = %+v", r)

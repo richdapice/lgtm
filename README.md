@@ -193,8 +193,9 @@ While it reviews, the bright bar is whichever lens is running. After that the ga
 ```toml
 [lgtm]
 mode = "auto"            # auto | manual
-max_fix_rounds = 3
+max_fix_rounds = 3       # decide → fix → check → verify cycles before it stops
 fanout = "single"        # single | parallel
+# passes = ["sonnet", "opus"]   # review twice: a cheap read, then a stronger second opinion
 # max_budget_usd = 0.75  # cap per agent call; 0 = none
 
 [lens.conventions]

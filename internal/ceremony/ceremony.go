@@ -255,9 +255,19 @@ func prepare(ctx context.Context, o Options) (*Ceremony, error) {
 	}
 	rows := lenses
 	if c.repo.Settings.Fanout != "parallel" {
-		// one call, one row; per-lens counts go to the log
-		rows = []string{"review"}
-		models["review"] = ag.Model
+		// one call per pass, one row each; per-lens counts go to the log
+		rows = nil
+		for i, model := range c.repo.Settings.Passes {
+			name := "review"
+			if len(c.repo.Settings.Passes) > 1 {
+				name = fmt.Sprintf("review %d", i+1)
+			}
+			rows = append(rows, name)
+			if model == "" {
+				model = ag.Model
+			}
+			models[name] = model
+		}
 	}
 	c.run = run.New(c.branch, c.base, mode, c.repo.Settings.MaxFixRounds, rows, models)
 	c.run.Tree = c.tree
@@ -316,19 +326,26 @@ func (c *Ceremony) discover(ctx context.Context) error {
 		}
 		wg.Wait()
 	} else {
-		c.setLens("review", run.Running, 0)
-		res, err := c.reviewer.Ask(ctx, lens.BuildPrompt(lens.Input{Lenses: lenses, Diff: c.diff, Conventions: c.conventions, Intent: c.intent}), lens.Schema)
-		c.addCost(res.CostUSD)
-		c.logCall("discover", res)
-		if err != nil {
-			c.setLensFailed("review", err)
-			return err
+		// passes run in order; a later pass is usually the stronger model,
+		// and its findings union with the earlier ones by stable ID
+		for i := range c.repo.Settings.Passes {
+			row := c.run.Lenses[i].Name
+			c.setLens(row, run.Running, 0)
+			ad := c.reviewer
+			ad.Model = c.run.Lenses[i].Model
+			res, err := ad.Ask(ctx, lens.BuildPrompt(lens.Input{Lenses: lenses, Diff: c.diff, Conventions: c.conventions, Intent: c.intent}), lens.Schema)
+			c.addCost(res.CostUSD)
+			c.logCall(row, res)
+			if err != nil {
+				c.setLensFailed(row, err)
+				return err
+			}
+			results = append(results, result{lenses, res, nil})
 		}
-		results = []result{{lenses, res, nil}}
 	}
 
 	var firstErr error
-	for _, r := range results {
+	for i, r := range results {
 		if r.err != nil {
 			if firstErr == nil {
 				firstErr = r.err
@@ -359,7 +376,7 @@ func (c *Ceremony) discover(ctx context.Context) error {
 			for _, n := range per {
 				total += n
 			}
-			c.setLens("review", run.LensDone, total)
+			c.setLens(c.run.Lenses[i].Name, run.LensDone, total)
 		}
 		c.log("per lens: %v", per)
 	}

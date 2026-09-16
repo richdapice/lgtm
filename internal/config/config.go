@@ -46,11 +46,16 @@ type Repo struct {
 }
 
 type Settings struct {
-	Mode         string `toml:"mode"`            // manual | auto
-	MaxFixRounds int    `toml:"max_fix_rounds"`  // verify rounds before handing off
-	Fanout       string `toml:"fanout"`          // single | parallel
-	Agent        string `toml:"agent,omitempty"` // overrides Global.DefaultAgent
-	Base         string `toml:"base,omitempty"`  // PR base; empty = detect default branch
+	Mode         string `toml:"mode"`           // manual | auto
+	MaxFixRounds int    `toml:"max_fix_rounds"` // verify rounds before handing off
+	Fanout       string `toml:"fanout"`         // single | parallel
+	// Passes is how many times the diff is reviewed, and on what: one model
+	// per pass, findings unioned. ["sonnet", "opus"] is a cheap first read
+	// with a stronger second opinion. At least one; default is the agent's
+	// model.
+	Passes []string `toml:"passes,omitempty"`
+	Agent  string   `toml:"agent,omitempty"` // overrides Global.DefaultAgent
+	Base   string   `toml:"base,omitempty"`  // PR base; empty = detect default branch
 	// MaxBudgetUSD caps each agent call. A reviewer with Read/Grep can explore
 	// well beyond the diff, which is where quality comes from and where cost
 	// goes; this is the knob. 0 = uncapped.
@@ -158,6 +163,9 @@ func LoadRepo(root string) (*Repo, error) {
 	}
 	if r.Settings.Fanout == "" {
 		r.Settings.Fanout = "single"
+	}
+	if len(r.Settings.Passes) == 0 {
+		r.Settings.Passes = []string{""} // one pass on the agent's default model
 	}
 	if r.Lenses == nil {
 		r.Lenses = map[string]Lens{}
