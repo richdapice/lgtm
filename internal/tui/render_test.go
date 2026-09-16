@@ -98,7 +98,7 @@ func TestSplashFrame(t *testing.T) {
 	lipgloss.SetColorProfile(termenv.Ascii)
 	m := newModel(context.Background(), func() {})
 	m.width = 96
-	m.frame = 120 // fully decoded
+	m.frame = 260 // fully decoded
 	m.run = run.Run{Branch: "b", Base: "main", Step: "review", StepNote: "4 lenses",
 		Lenses: []run.Lens{{Name: "review", State: run.Running}}}
 	out := m.View()

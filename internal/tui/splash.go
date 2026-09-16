@@ -87,9 +87,11 @@ func rain(frame, width, rows int, seed int) []string {
 func decodeOrder(x, y int) int { return int(hash(x, y, 7) % 1000) }
 
 // renderMark draws the wordmark decoding out of noise. progress 0..1000 is
-// how much has locked in; it climbs with the frame and holds at full.
+// how much has locked in; it climbs with the frame (about 17 seconds to
+// full at the spinner's 12 ticks a second — a review takes a minute, and
+// the reveal should feel earned) and holds there.
 func renderMark(frame int) []string {
-	progress := frame * 12
+	progress := frame * 5
 	if progress > 1000 {
 		progress = 1000
 	}
