@@ -54,6 +54,7 @@ enabled = false
 
 [lens.perf]
 model = "haiku"
+prompt = "hot paths doing more work than they need to"
 
 [[project]]
 path = "website"
@@ -71,7 +72,7 @@ test = "npx vitest related {files} --run"
 	if len(r.Settings.Passes) != 2 || r.Settings.Passes[1] != "opus" {
 		t.Fatalf("passes = %v", r.Settings.Passes)
 	}
-	if r.Settings.Mode != "auto" || r.Settings.MaxFixRounds != 2 || r.Settings.Fanout != "single" {
+	if r.Settings.Mode != "auto" || r.Settings.MaxFixRounds != 2 || r.Settings.Dispatch != "batch" {
 		t.Fatalf("settings = %+v", r.Settings)
 	}
 	got := r.EnabledLenses()
@@ -92,6 +93,29 @@ test = "npx vitest related {files} --run"
 	}
 	if p := r.ProjectFor("websiteish/x.ts"); p.Path != "." {
 		t.Fatalf("prefix match too loose: %q", p.Path)
+	}
+}
+
+func TestLensPrompts(t *testing.T) {
+	root := t.TempDir()
+	os.WriteFile(filepath.Join(root, RepoFile), []byte(`
+[lens.perf]
+prompt = "hot paths"
+[lens.correctness]
+prompt = "my own idea of correctness"
+`), 0o644)
+	r, _ := LoadRepo(root)
+	ps, err := r.LensPrompts(map[string]string{"correctness": "builtin", "conventions": "b", "security": "b", "tests": "b"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ps["perf"] != "hot paths" || ps["correctness"] != "my own idea of correctness" || ps["tests"] != "b" {
+		t.Fatalf("prompts = %v", ps)
+	}
+	os.WriteFile(filepath.Join(root, RepoFile), []byte("[lens.mystery]\n"), 0o644)
+	r, _ = LoadRepo(root)
+	if _, err := r.LensPrompts(map[string]string{}); err == nil {
+		t.Fatal("custom lens without a prompt accepted")
 	}
 }
 

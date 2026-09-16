@@ -1,5 +1,5 @@
 // Package lens turns a diff into findings. One call can carry several lenses
-// (the single-call default) or one (parallel fanout); the prompt and schema are
+// (batch dispatch, the default) or one (parallel dispatch); the prompt and schema are
 // the same either way, which is what lets the two modes be a config switch.
 //
 // Decode is deliberately strict where the agent tier is lenient: unknown
@@ -55,6 +55,7 @@ var Descriptions = map[string]string{
 
 type Input struct {
 	Lenses      []string
+	Prompts     map[string]string // per lens; Descriptions when nil
 	Diff        string
 	Conventions string // CLAUDE.md / AGENTS.md text, may be empty
 	Intent      string // optional: what the author says the change is for
@@ -66,7 +67,11 @@ func BuildPrompt(in Input) string {
 	b.WriteString("Report findings only: things a careful reviewer would raise. Do not summarize, praise, or restate the diff.\n\n")
 	b.WriteString("Lenses to apply:\n")
 	for _, l := range in.Lenses {
-		fmt.Fprintf(&b, "- %s: %s\n", l, Descriptions[l])
+		p := in.Prompts[l]
+		if p == "" {
+			p = Descriptions[l]
+		}
+		fmt.Fprintf(&b, "- %s: %s\n", l, p)
 	}
 	b.WriteString(`
 Severity:

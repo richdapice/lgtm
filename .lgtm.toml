@@ -10,7 +10,7 @@
 [lgtm]
   mode = "auto"
   max_fix_rounds = 3
-  fanout = "single"
+  dispatch = "batch"
   max_budget_usd = 0.0
 
 [[project]]

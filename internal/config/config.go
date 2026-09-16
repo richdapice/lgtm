@@ -48,7 +48,10 @@ type Repo struct {
 type Settings struct {
 	Mode         string `toml:"mode"`           // manual | auto
 	MaxFixRounds int    `toml:"max_fix_rounds"` // verify rounds before handing off
-	Fanout       string `toml:"fanout"`         // single | parallel
+	// Dispatch is how the lenses are sent to the agent: "batch" is one call
+	// carrying every lens; "parallel" is one call per lens, concurrently, each
+	// on its own model.
+	Dispatch string `toml:"dispatch"`
 	// Passes is how many times the diff is reviewed, and on what: one model
 	// per pass, findings unioned. ["sonnet", "opus"] is a cheap first read
 	// with a stronger second opinion. At least one; default is the agent's
@@ -70,6 +73,10 @@ func (s Settings) ReactionsOn() bool { return s.Reactions == nil || *s.Reactions
 type Lens struct {
 	Model   string `toml:"model"`
 	Enabled *bool  `toml:"enabled"` // nil = enabled
+	// Prompt is what the lens looks for, in a sentence or two. Required for a
+	// lens you add; the built-in four have theirs already and you can
+	// override them here.
+	Prompt string `toml:"prompt"`
 }
 
 // Project routes changed paths to the commands that check them. Order matters:
@@ -145,7 +152,7 @@ func (g *Global) Agent(name string) (Agent, bool) {
 }
 
 // LoadRepo reads .lgtm.toml from the repo root. Missing is fine: the defaults
-// are autopilot, three rounds, single-call fanout, all four lenses, and one
+// are autopilot, three rounds, batch dispatch, all four lenses, and one
 // project at "." with no commands (so the fix loop will apply edits but not
 // re-run checks until you tell it how).
 func LoadRepo(root string) (*Repo, error) {
@@ -161,8 +168,8 @@ func LoadRepo(root string) (*Repo, error) {
 	if r.Settings.MaxFixRounds == 0 {
 		r.Settings.MaxFixRounds = 3
 	}
-	if r.Settings.Fanout == "" {
-		r.Settings.Fanout = "single"
+	if r.Settings.Dispatch == "" {
+		r.Settings.Dispatch = "batch"
 	}
 	if len(r.Settings.Passes) == 0 {
 		r.Settings.Passes = []string{""} // one pass on the agent's default model
@@ -179,6 +186,26 @@ func LoadRepo(root string) (*Repo, error) {
 		r.Projects = []Project{{Path: "."}}
 	}
 	return &r, nil
+}
+
+// LensPrompts is the prompt text per enabled lens: the built-in text unless
+// the config overrides it, and whatever the config says for a lens of its
+// own. A custom lens without a prompt is an error — the agent would have
+// nothing to look for.
+func (r *Repo) LensPrompts(builtin map[string]string) (map[string]string, error) {
+	out := map[string]string{}
+	for _, name := range r.EnabledLenses() {
+		if p := r.Lenses[name].Prompt; p != "" {
+			out[name] = p
+			continue
+		}
+		if p, ok := builtin[name]; ok {
+			out[name] = p
+			continue
+		}
+		return nil, fmt.Errorf("config: lens %q needs a prompt (what should it look for?)", name)
+	}
+	return out, nil
 }
 
 // EnabledLenses returns lens names in a stable order — DefaultLenses first, then

@@ -67,6 +67,7 @@ type Ceremony struct {
 	intent                                               string
 	conventions                                          string
 	dismiss                                              *finding.DismissList
+	prompts                                              map[string]string // per lens
 
 	run *run.Run
 	mu  sync.Mutex
@@ -215,6 +216,9 @@ func prepare(ctx context.Context, o Options) (*Ceremony, error) {
 		c.intent, _ = gitx.Run(ctx, c.root, "log", "--format=%s%n%b", c.mergeBase+"..HEAD")
 	}
 	c.conventions = gatherConventions(c.root, c.changed)
+	if c.prompts, err = c.repo.LensPrompts(lens.Descriptions); err != nil {
+		return nil, err
+	}
 	if c.dismiss, err = finding.LoadDismissList(c.root); err != nil {
 		return nil, err
 	}
@@ -254,7 +258,7 @@ func prepare(ctx context.Context, o Options) (*Ceremony, error) {
 		}
 	}
 	rows := lenses
-	if c.repo.Settings.Fanout != "parallel" {
+	if c.repo.Settings.Dispatch != "parallel" {
 		// one call per pass, one row each; per-lens counts go to the log
 		rows = nil
 		for i, model := range c.repo.Settings.Passes {
@@ -305,7 +309,7 @@ func (c *Ceremony) discover(ctx context.Context) error {
 		err    error
 	}
 	var results []result
-	if c.repo.Settings.Fanout == "parallel" {
+	if c.repo.Settings.Dispatch == "parallel" {
 		results = make([]result, len(lenses))
 		var wg sync.WaitGroup
 		for i, l := range lenses {
@@ -315,7 +319,7 @@ func (c *Ceremony) discover(ctx context.Context) error {
 				c.setLens(l, run.Running, 0)
 				ad := c.reviewer
 				ad.Model = c.run.Lens(l).Model
-				res, err := ad.Ask(ctx, lens.BuildPrompt(lens.Input{Lenses: []string{l}, Diff: c.diff, Conventions: c.conventions, Intent: c.intent}), lens.Schema)
+				res, err := ad.Ask(ctx, lens.BuildPrompt(lens.Input{Lenses: []string{l}, Prompts: c.prompts, Diff: c.diff, Conventions: c.conventions, Intent: c.intent}), lens.Schema)
 				results[i] = result{[]string{l}, res, err}
 				c.addCost(res.CostUSD)
 				c.logCall("discover/"+l, res)
@@ -333,7 +337,7 @@ func (c *Ceremony) discover(ctx context.Context) error {
 			c.setLens(row, run.Running, 0)
 			ad := c.reviewer
 			ad.Model = c.run.Lenses[i].Model
-			res, err := ad.Ask(ctx, lens.BuildPrompt(lens.Input{Lenses: lenses, Diff: c.diff, Conventions: c.conventions, Intent: c.intent}), lens.Schema)
+			res, err := ad.Ask(ctx, lens.BuildPrompt(lens.Input{Lenses: lenses, Prompts: c.prompts, Diff: c.diff, Conventions: c.conventions, Intent: c.intent}), lens.Schema)
 			c.addCost(res.CostUSD)
 			c.logCall(row, res)
 			if err != nil {
@@ -367,7 +371,7 @@ func (c *Ceremony) discover(ctx context.Context) error {
 				per[f.Lens]++
 			}
 		}
-		if c.repo.Settings.Fanout == "parallel" {
+		if c.repo.Settings.Dispatch == "parallel" {
 			for _, l := range r.lenses {
 				c.setLens(l, run.LensDone, per[l])
 			}

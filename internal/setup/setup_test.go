@@ -41,7 +41,7 @@ func TestPromptAndWriteRoundTrip(t *testing.T) {
 	in := strings.NewReader("\n-\nauto\n2\n\n")
 	var out strings.Builder
 	r := Prompt(in, &out, d, false)
-	if r.Projects[0].Test != "go test ./..." || r.Projects[0].Lint != "" || r.Settings.Mode != "auto" || r.Settings.MaxFixRounds != 2 || r.Settings.Fanout != "single" {
+	if r.Projects[0].Test != "go test ./..." || r.Projects[0].Lint != "" || r.Settings.Mode != "auto" || r.Settings.MaxFixRounds != 2 || r.Settings.Dispatch != "batch" {
 		t.Fatalf("prompted = %+v", r)
 	}
 	if err := Write(root, r); err != nil {

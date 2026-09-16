@@ -115,7 +115,7 @@ func detectDir(dir, rel string) (config.Project, bool) {
 // it, anything else replaces it. yes skips the questions entirely.
 func Prompt(in io.Reader, out io.Writer, d Detected, yes bool) config.Repo {
 	r := config.Repo{
-		Settings: config.Settings{Mode: "auto", MaxFixRounds: 3, Fanout: "single"},
+		Settings: config.Settings{Mode: "auto", MaxFixRounds: 3, Dispatch: "batch"},
 		Projects: d.Projects,
 	}
 	for _, n := range d.Notes {
@@ -147,7 +147,7 @@ func Prompt(in io.Reader, out io.Writer, d Detected, yes bool) config.Repo {
 	fmt.Fprintln(out)
 	r.Settings.Mode = ask("mode (manual|auto)", r.Settings.Mode)
 	fmt.Sscanf(ask("max fix rounds", "3"), "%d", &r.Settings.MaxFixRounds)
-	r.Settings.Fanout = ask("fanout (single|parallel)", r.Settings.Fanout)
+	r.Settings.Dispatch = ask("dispatch (batch|parallel)", r.Settings.Dispatch)
 	return r
 }
 
@@ -166,6 +166,7 @@ func Write(root string, r config.Repo) error {
 # skipped and reported as skipped — never counted as a pass.
 #
 # [lens.<name>] model = "haiku" | "sonnet" | "opus" overrides the agent default.
+# Add a lens of your own: [lens.perf] prompt = "what it should look for".
 
 `)
 	return toml.NewEncoder(f).Encode(r)

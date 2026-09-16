@@ -84,7 +84,7 @@ lgtm
 
 ![lgtm reviewing a branch in the terminal: findings, a decision, the gates, the stamp](docs/demo.gif)
 
-First it reads the diff. Four lenses look at what changed between your branch and its base: correctness, your project's conventions (it reads `CLAUDE.md` and `AGENTS.md` if you have them), security, and tests. That's one agent call by default. The agent can read the rest of the repo while it thinks, which is where the good findings come from. The one above needed to know that nothing else in the file scheduled a retry.
+First it reads the diff. Four lenses look at what changed between your branch and its base: correctness, your project's conventions (it reads `CLAUDE.md` and `AGENTS.md` if you have them), security, and tests. A lens is a paragraph telling the reviewer what to look for; you can add your own in `.lgtm.toml`. That's one agent call by default. The agent can read the rest of the repo while it thinks, which is where the good findings come from. The one above needed to know that nothing else in the file scheduled a retry.
 
 Then it shows you what it found. Each finding is a `block` (must be fixed), an `ask` (your call), or a `file` (worth writing down, no need to stop). The `file` ones are recorded and stay out of your way. The rest go in the panel, one at a time, with the lines they point at.
 
@@ -194,12 +194,15 @@ While it reviews, the bright bar is whichever lens is running. After that the ga
 [lgtm]
 mode = "auto"            # auto | manual
 max_fix_rounds = 3       # decide → fix → check → verify cycles before it stops
-fanout = "single"        # single | parallel
+dispatch = "batch"       # batch: one call with every lens · parallel: one call per lens
 # passes = ["sonnet", "opus"]   # review twice: a cheap read, then a stronger second opinion
 # max_budget_usd = 0.75  # cap per agent call; 0 = none
 
 [lens.conventions]
-model = "haiku"          # per-lens model when fanout = "parallel"
+model = "haiku"          # per-lens model when dispatch = "parallel"
+
+[lens.perf]              # a lens of your own: name it, say what it looks for
+prompt = "hot paths doing more work than they need to; N+1 queries; work inside loops that could happen once"
 
 [[project]]              # monorepos: first path-prefix match wins, so "." goes last
 path = "website"
