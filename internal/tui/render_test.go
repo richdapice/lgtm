@@ -93,3 +93,26 @@ func TestProgressFrame(t *testing.T) {
 		}
 	}
 }
+
+func TestSplashFrame(t *testing.T) {
+	lipgloss.SetColorProfile(termenv.Ascii)
+	m := newModel(context.Background(), func() {})
+	m.width = 96
+	m.frame = 7
+	m.run = run.Run{Branch: "b", Base: "main", Step: "review", StepNote: "4 lenses",
+		Lenses: []run.Lens{{Name: "review", State: run.Running}}}
+	out := m.View()
+	if os.Getenv("SHOW") != "" {
+		fmt.Println(out)
+	}
+	for _, want := range []string{"██╗      ██████╗", "review · 4 lenses", "q cancel"} {
+		if !contains(out, want) {
+			t.Errorf("splash missing %q\n%s", want, out)
+		}
+	}
+	// the mark must survive a narrow terminal
+	m.width = 30
+	if !contains(m.View(), "L G T M") {
+		t.Error("narrow fallback missing")
+	}
+}

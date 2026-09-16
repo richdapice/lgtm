@@ -12,6 +12,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
@@ -93,6 +94,7 @@ type model struct {
 	decider *chanDecider
 
 	run    run.Run
+	frame  int // animation frame, advanced by the spinner tick
 	files  []diffparse.FileDiff
 	canFix bool
 	notes  []string
@@ -133,6 +135,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case spinner.TickMsg:
+		m.frame++
 		var cmd tea.Cmd
 		m.spin, cmd = m.spin.Update(msg)
 		return m, cmd
@@ -283,13 +286,18 @@ func (m *model) View() string {
 	}
 	var b strings.Builder
 	b.WriteString(" " + m.header() + "\n")
-	if m.pending == nil {
+	switch {
+	case m.pending == nil && m.run.Step == "review" && !m.run.Findings.Closed:
+		b.WriteString(m.splash())
+	case m.pending == nil:
 		b.WriteString(m.progress())
-	} else {
+	default:
 		b.WriteString(m.review())
 	}
 	return b.String()
 }
+
+func (m *model) now() time.Time { return time.Now() }
 
 func (m *model) header() string {
 	r := m.run
