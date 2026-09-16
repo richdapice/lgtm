@@ -156,3 +156,15 @@ comment = "lgtm: {found} found, {fixed} fixed"
 		t.Fatal("unknown reaction accepted")
 	}
 }
+
+func TestIgnoreGlobs(t *testing.T) {
+	st := Settings{Ignore: []string{"**/*.md", "docs/**", ".github/**", "*.lock"}}
+	for path, want := range map[string]bool{
+		"README.md": true, "src/deep/notes.md": true, "docs/a/b.png": true, ".github/workflows/ci.yml": true,
+		"yarn.lock": true, "src/main/sync.ts": false, "docs.ts": false, "src/lock": false,
+	} {
+		if got := st.Ignored(path); got != want {
+			t.Errorf("Ignored(%q) = %v, want %v", path, got, want)
+		}
+	}
+}

@@ -209,6 +209,7 @@ dispatch = "batch"       # batch: one agent call carrying every lens (default)
 passes = ["sonnet", "opus"]   # review the diff more than once, each pass on its own model;
                               # findings merge. Default: one pass on the agent's model.
 max_budget_usd = 0.75    # cap per agent call; unset = none
+ignore = ["**/*.md", "docs/**", ".github/**"]   # changes to these never trigger checks
 
 [lens.conventions]
 model = "haiku"          # per-lens model, used when dispatch = "parallel"

@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 )
@@ -58,6 +60,10 @@ type Settings struct {
 	// with a stronger second opinion. At least one; default is the agent's
 	// model.
 	Passes []string `toml:"passes,omitempty"`
+	// Ignore lists globs of changed files that never trigger checks: docs, CI
+	// config, anything your tests don't care about. A diff made only of these
+	// skips check and recheck. ** matches across directories.
+	Ignore []string `toml:"ignore,omitempty"`
 	Agent  string   `toml:"agent,omitempty"` // overrides Global.DefaultAgent
 	Base   string   `toml:"base,omitempty"`  // PR base; empty = detect default branch
 	// MaxBudgetUSD caps each agent call. A reviewer with Read/Grep can explore
@@ -302,4 +308,43 @@ func rawKeys(root, table, key string) (string, bool) {
 	}
 	s, _ := v.(string)
 	return s, true
+}
+
+// Ignored reports whether a repo-relative path matches any ignore glob.
+func (s Settings) Ignored(rel string) bool {
+	for _, g := range s.Ignore {
+		if globMatch(g, rel) {
+			return true
+		}
+	}
+	return false
+}
+
+// globMatch is filepath.Match plus **, which matches any number of path
+// segments (including none), the way .gitignore and most tools read it.
+func globMatch(pattern, name string) bool {
+	var re strings.Builder
+	re.WriteString("^")
+	for i := 0; i < len(pattern); i++ {
+		c := pattern[i]
+		switch {
+		case c == '*' && i+1 < len(pattern) && pattern[i+1] == '*':
+			i++
+			if i+1 < len(pattern) && pattern[i+1] == '/' {
+				i++
+				re.WriteString("(?:.*/)?")
+			} else {
+				re.WriteString(".*")
+			}
+		case c == '*':
+			re.WriteString("[^/]*")
+		case c == '?':
+			re.WriteString("[^/]")
+		default:
+			re.WriteString(regexp.QuoteMeta(string(c)))
+		}
+	}
+	re.WriteString("$")
+	ok, _ := regexp.MatchString(re.String(), name)
+	return ok
 }

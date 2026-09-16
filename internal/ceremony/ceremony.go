@@ -303,14 +303,31 @@ func (c *Ceremony) refreshDiff(ctx context.Context) error {
 	return err
 }
 
+// checkable drops files the config says never trigger checks.
+func (c *Ceremony) checkable(files []string) []string {
+	var out []string
+	for _, f := range files {
+		if !c.repo.Settings.Ignored(f) {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
 // floor runs your checks on the branch's own changes before any token is
 // spent. A diff that doesn't compile doesn't get reviewed; it gets sent back.
 func (c *Ceremony) floor(ctx context.Context) error {
 	if c.run.Findings.Closed {
 		return nil // resumed: the floor already passed
 	}
-	c.step("floor", fmt.Sprintf("%d changed file(s)", len(c.changed)))
-	checks := project.Run(ctx, c.root, project.Plan(c.repo, c.changed))
+	files := c.checkable(c.changed)
+	if len(files) == 0 {
+		c.step("floor", "nothing to check")
+		c.println("only ignored files changed; skipping checks")
+		return nil
+	}
+	c.step("floor", fmt.Sprintf("%d changed file(s)", len(files)))
+	checks := project.Run(ctx, c.root, project.Plan(c.repo, files))
 	ok, skipped := project.AllOK(checks)
 	if skipped == len(checks) {
 		c.println("no checks configured for the changed files; `lgtm init` adds them")
@@ -564,7 +581,7 @@ func (c *Ceremony) rounds(ctx context.Context) error {
 		// nothing lands unvalidated: the repo's own checks run on what the
 		// fixer touched, and a failing check reverts the round
 		c.step("check", fmt.Sprintf("%d file(s) touched", len(touched)))
-		checks := project.Run(ctx, c.root, project.Plan(c.repo, touched))
+		checks := project.Run(ctx, c.root, project.Plan(c.repo, c.checkable(touched)))
 		ok, skipped := project.AllOK(checks)
 		if ok && skipped == len(checks) {
 			// every check was skipped: nothing validated the fix, so nothing
@@ -716,7 +733,7 @@ func (c *Ceremony) openPR(ctx context.Context) error {
 	c.step("pr", "writing the body")
 	// literal check output for the Tests section — the body must not claim
 	// anything this run did not see
-	checks := project.Run(ctx, c.root, project.Plan(c.repo, c.changed))
+	checks := project.Run(ctx, c.root, project.Plan(c.repo, c.checkable(c.changed)))
 	var fixed, filed []finding.Finding
 	for _, f := range c.run.Findings.Findings {
 		switch f.State {
