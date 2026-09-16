@@ -64,7 +64,7 @@ func Demo(ctx context.Context) error {
 		send := func() { p.Send(updateMsg{r}) }
 
 		send()
-		if !tick(7000 * time.Millisecond) {
+		if !tick(3600 * time.Millisecond) {
 			return
 		}
 		var set finding.Set

@@ -7,9 +7,11 @@ import (
 )
 
 // The review gate is the one place you wait a minute with nothing to read.
-// What's on screen then: diff glyphs raining down in columns, and the wordmark
-// decoding out of the noise cell by cell, with a glitch now and then — the run
-// is cracking your diff, and it looks like it.
+// What's on screen then is the stamp. LGTM is a rubber stamp on a pull
+// request, so it arrives like one: it hovers hollow for half a second, drops,
+// hits with a one-frame flash and a little ink bleed at the edges, and then it
+// sits there — solid, unevenly inked the way a real stamp is — while the
+// review line ticks underneath. The word is readable from the first frame.
 
 var lgtmMark = []string{
 	"██╗      ██████╗ ████████╗███╗   ███╗",
@@ -21,20 +23,23 @@ var lgtmMark = []string{
 }
 
 var (
-	rainHead   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.AdaptiveColor{Light: "#1a7f37", Dark: "#d2ffd8"})
-	rainHi     = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#1a7f37", Dark: "#3fb950"})
-	rainLo     = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#6b7280", Dark: "#1f6f2e"})
-	rainDim    = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#9ca3af", Dark: "#123d1c"})
-	markOn     = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.AdaptiveColor{Light: "#1a7f37", Dark: "#3fb950"})
-	markNoise  = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#6b7280", Dark: "#2a7a3b"})
-	markGlitch = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.AdaptiveColor{Light: "#ffffff", Dark: "#0d1117"}).
-			Background(lipgloss.AdaptiveColor{Light: "#1a7f37", Dark: "#3fb950"})
+	inkFull  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.AdaptiveColor{Light: "#1a7f37", Dark: "#3fb950"})
+	inkThin  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.AdaptiveColor{Light: "#2da44e", Dark: "#2ea043"})
+	inkEdge  = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#1a7f37", Dark: "#238636"})
+	hollow   = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#9ca3af", Dark: "#3d4450"})
+	flash    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.AdaptiveColor{Light: "#1f2328", Dark: "#f0f6fc"})
+	bleedHi  = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#1a7f37", Dark: "#2ea043"})
+	bleedLo  = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#6b7280", Dark: "#1b4d27"})
+	stampDim = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#6b7280", Dark: "#8b949e"})
 )
 
-const glyphs = "+-{}();=<>/*&|!01234567890abcdef#$%"
+// the stamp's timeline, in spinner ticks (~12/s)
+const (
+	hoverUntil = 6  // hollow, one row higher
+	flashUntil = 8  // impact
+	bleedUntil = 16 // ink spreading past the edges, fading
+)
 
-// hash is a small integer mixer so every cell gets its own stable randomness
-// without allocating a generator per frame.
 func hash(a, b, c int) uint32 {
 	h := uint32(a)*0x9E3779B1 ^ uint32(b)*0x85EBCA77 ^ uint32(c)*0xC2B2AE3D
 	h ^= h >> 15
@@ -43,148 +48,133 @@ func hash(a, b, c int) uint32 {
 	return h
 }
 
-func glyph(h uint32) string { return string(glyphs[h%uint32(len(glyphs))]) }
+func isInk(r rune) bool  { return r == '█' }
+func isEdge(r rune) bool { return strings.ContainsRune("╗║╝╔═╚", r) }
 
-// rain renders rows of falling columns. Each column has its own speed and
-// phase; the head is bright, the tail fades over ~6 cells, and the glyphs
-// churn as they fall.
-func rain(frame, width, rows int, seed int) []string {
-	out := make([]string, rows)
-	for r := 0; r < rows; r++ {
+// renderStamp draws the mark for one frame of its timeline. It returns the
+// rows plus one row of bleed above and below (blank when there is none).
+func renderStamp(frame int) []string {
+	w := len([]rune(lgtmMark[0]))
+	var rows []string
+
+	// bleed: cells just outside the ink that catch some, fading over the bleed window
+	bleedRow := func(y int, rowAbove bool) string {
+		if frame < flashUntil || frame >= bleedUntil {
+			return strings.Repeat(" ", w+2)
+		}
+		age := frame - flashUntil // 0..7
 		var b strings.Builder
-		for x := 0; x < width; x++ {
-			hc := hash(x, seed, 1)
-			if hc%100 >= 45 { // ~45% of columns carry rain
+		for x := -1; x <= w; x++ {
+			src := y
+			if rowAbove {
+				src = 0
+			} else {
+				src = len(lgtmMark) - 1
+			}
+			near := false
+			for dx := -1; dx <= 1; dx++ {
+				if xx := x + dx; xx >= 0 && xx < w && isInk([]rune(lgtmMark[src])[xx]) {
+					near = true
+				}
+			}
+			h := hash(x, y, 3)
+			if !near || h%100 >= 55-uint32(age)*6 {
 				b.WriteByte(' ')
 				continue
 			}
-			speed := int(hc%3) + 1
-			period := rows + 8 + int(hc%9)
-			head := (frame/speed + int(hc%uint32(period))) % period
-			d := head - r
-			g := glyph(hash(x, r, frame/2))
-			switch {
-			case d == 0:
-				b.WriteString(rainHead.Render(g))
-			case d > 0 && d < 3:
-				b.WriteString(rainHi.Render(g))
-			case d >= 3 && d < 6:
-				b.WriteString(rainLo.Render(g))
-			case d >= 6 && d < 8:
-				b.WriteString(rainDim.Render(g))
-			default:
-				b.WriteByte(' ')
+			if age < 3 {
+				b.WriteString(bleedHi.Render("▒"))
+			} else {
+				b.WriteString(bleedLo.Render("░"))
 			}
 		}
-		out[r] = b.String()
+		return b.String()
 	}
-	return out
-}
 
-// decodeOrder gives each mark cell a rank; cells lock in rank order as the
-// frame advances, so the letters resolve in a scrambled sweep rather than
-// left to right.
-func decodeOrder(x, y int) int { return int(hash(x, y, 7) % 1000) }
-
-// renderMark draws the wordmark decoding out of noise. progress 0..1000 is
-// how much has locked in; it climbs with the frame (about 17 seconds to
-// full at the spinner's 12 ticks a second — a review takes a minute, and
-// the reveal should feel earned) and holds there.
-func renderMark(frame int) []string {
-	progress := frame * 5
-	if progress > 1000 {
-		progress = 1000
-	}
-	glitchRow, glitchShift := -1, 0
-	if progress >= 1000 && hash(frame/3, 0, 5)%9 == 0 {
-		glitchRow = int(hash(frame, 1, 5) % uint32(len(lgtmMark)))
-		glitchShift = int(hash(frame, 2, 5)%3) - 1
-	}
-	invertBand := progress >= 1000 && hash(frame/2, 0, 6)%23 == 0
-	out := make([]string, len(lgtmMark))
+	rows = append(rows, bleedRow(-1, true))
 	for y, row := range lgtmMark {
 		runes := []rune(row)
 		var b strings.Builder
-		if y == glitchRow && glitchShift > 0 {
-			b.WriteString(strings.Repeat(" ", glitchShift))
-		}
-		start := 0
-		if y == glitchRow && glitchShift < 0 {
-			start = -glitchShift
-		}
-		for x := start; x < len(runes); x++ {
-			ch := runes[x]
-			if ch == ' ' {
-				b.WriteByte(' ')
-				continue
+		// side bleed
+		side := func(x int) string {
+			if frame < flashUntil || frame >= bleedUntil {
+				return " "
 			}
+			nx := 0
+			if x > 0 {
+				nx = w - 1
+			}
+			if !isInk(runes[nx]) || hash(x, y, 5)%100 >= 40 {
+				return " "
+			}
+			if frame-flashUntil < 3 {
+				return bleedHi.Render("▒")
+			}
+			return bleedLo.Render("░")
+		}
+		b.WriteString(side(0))
+		for x, r := range runes {
 			switch {
-			case invertBand && x/6%2 == 0:
-				b.WriteString(markGlitch.Render(string(ch)))
-			case decodeOrder(x, y) < progress:
-				b.WriteString(markOn.Render(string(ch)))
-			case hash(x, y, frame)%4 == 0:
+			case r == ' ':
 				b.WriteByte(' ')
+			case frame < hoverUntil:
+				// hollow: the ink is outlined, not filled
+				if isInk(r) {
+					b.WriteString(hollow.Render("░"))
+				} else {
+					b.WriteString(hollow.Render(string(r)))
+				}
+			case frame < flashUntil:
+				b.WriteString(flash.Render(string(r)))
 			default:
-				b.WriteString(markNoise.Render(glyph(hash(x, y, frame))))
+				// settled: solid, with the uneven inking of a real stamp that
+				// drifts very slowly
+				if isInk(r) {
+					switch hash(x, y, frame/40) % 10 {
+					case 0:
+						b.WriteString(inkThin.Render("▓"))
+					default:
+						b.WriteString(inkFull.Render("█"))
+					}
+				} else if isEdge(r) {
+					b.WriteString(inkEdge.Render(string(r)))
+				} else {
+					b.WriteString(inkFull.Render(string(r)))
+				}
 			}
 		}
-		out[y] = b.String()
+		b.WriteString(side(w))
+		rows = append(rows, b.String())
 	}
-	return out
+	rows = append(rows, bleedRow(len(lgtmMark), false))
+	return rows
 }
 
-// splash is the review-gate view: rain above and below the decoding mark,
-// then a terse log of what the run is doing.
+// splash is the review-gate view: the stamp, then the review line.
 func (m *model) splash() string {
 	w := m.width
-	rainW := w - 4
-	if rainW > 72 {
-		rainW = 72
-	}
 	var b strings.Builder
-	b.WriteString("\n")
-	for _, l := range rain(m.frame, rainW, 3, 11) {
+	// the stamp hovers one row higher before it drops
+	if m.frame < hoverUntil {
+		b.WriteString("\n")
+	} else {
+		b.WriteString("\n\n")
+	}
+	for _, l := range renderStamp(m.frame) {
 		b.WriteString(lipgloss.PlaceHorizontal(w, lipgloss.Center, l) + "\n")
 	}
-	for _, l := range renderMark(m.frame) {
-		b.WriteString(lipgloss.PlaceHorizontal(w, lipgloss.Center, l) + "\n")
+	if m.frame < hoverUntil {
+		b.WriteString("\n")
 	}
-	for _, l := range rain(m.frame+17, rainW, 3, 23) {
-		b.WriteString(lipgloss.PlaceHorizontal(w, lipgloss.Center, l) + "\n")
-	}
-	b.WriteString("\n")
 	note := m.run.StepNote
 	if note == "" {
 		note = "reading the diff"
 	}
-	// typed log: characters appear a few per frame
-	log1 := "> review · " + note
-	log2 := "> " + m.run.Branch + " → " + m.run.Base
-	shown := func(s string, at int) string {
-		n := (m.frame - at) * 3
-		if n < 0 {
-			n = 0
-		}
-		if n > len([]rune(s)) {
-			n = len([]rune(s))
-		}
-		cur := ""
-		if n < len([]rune(s)) && m.frame%2 == 0 {
-			cur = "█"
-		}
-		return string([]rune(s)[:n]) + cur
-	}
-	pad := (w - 44) / 2
-	if pad < 1 {
-		pad = 1
-	}
-	ind := strings.Repeat(" ", pad)
-	b.WriteString(ind + rainHi.Render(shown(log2, 0)) + "\n")
-	b.WriteString(ind + rainHi.Render(shown(log1, 8)))
+	line := sAccent.Render(m.spin.View()) + " " + stampDim.Render("review · "+note)
 	if len(m.run.Lenses) > 0 && !m.run.Lenses[0].StartedAt.IsZero() {
-		b.WriteString(rainLo.Render("   " + m.run.Lenses[0].Elapsed(m.now()).Round(1e9).String()))
+		line += sFaint.Render("   " + m.run.Lenses[0].Elapsed(m.now()).Round(1e9).String())
 	}
-	b.WriteString("\n" + ind + rainDim.Render("q cancel") + "\n")
+	b.WriteString("\n" + lipgloss.PlaceHorizontal(w, lipgloss.Center, line) + "\n")
+	b.WriteString(lipgloss.PlaceHorizontal(w, lipgloss.Center, sFaint.Render("q cancel")) + "\n")
 	return b.String()
 }
