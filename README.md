@@ -21,12 +21,12 @@ You need `git`, `gh` logged in, and `claude` on your PATH (or another agent; see
 
 ![lgtm reviewing a branch in the terminal: findings, the gates, the stamp](docs/demo.gif)
 
-1. **review** — four lenses read the diff between your branch and its base: correctness, your project's conventions (from `CLAUDE.md` / `AGENTS.md`), security, tests. The agent can read the rest of the repo while it thinks; that's where the good findings come from.
-2. **decide** — on autopilot, this step is instant: every finding goes to the fixer with the judgement calls delegated. In manual mode, this is where it asks you.
-3. **fix** — the agent edits your working tree.
-4. **check** — your own test and lint commands run on the files it touched. A fix that fails them is reverted, not committed.
-5. **verify** — each fix is confirmed against the new diff. Anything still open goes around again, up to `max_fix_rounds`. The list of findings only ever gets shorter, so this always ends.
-6. **push · pr · ci** — it pushes, writes the PR body from the diff and the literal check output, opens the PR, reacts 👀, watches CI, reacts 👍.
+1. **review.** Four lenses read the diff between your branch and its base: correctness, your project's conventions (from `CLAUDE.md` / `AGENTS.md`), security, tests. The agent can read the rest of the repo while it thinks; that's where the good findings come from.
+2. **decide.** On autopilot this step is instant: every finding goes to the fixer with the judgement calls delegated. In manual mode, this is where it asks you.
+3. **fix.** The agent edits your working tree.
+4. **check.** Your own test and lint commands run on the files it touched. A fix that fails them is reverted, not committed.
+5. **verify.** Each fix is confirmed against the new diff. Anything still open goes around again, up to `max_fix_rounds`. The list of findings only ever gets shorter, so this always ends.
+6. **push, pr, ci.** It pushes, writes the PR body from the diff and the literal check output, opens the PR, reacts 👀, watches CI, reacts 👍.
 
 ```
  lgtm · worktree-sync-throttle → main      ⠋ fix · round 2 of 3      ≈$0.62
@@ -129,9 +129,9 @@ lgtm init --statusline      # adds it to Claude Code's status line
 
 It renders in about four milliseconds, from a state file the run writes as it goes, so it costs nothing and never blocks. It shows in every Claude Code session, and it changes shape with the run.
 
-**Header** — branch → base, then the mode or the state (`auto`, `manual`, `2 need you`, `passed`), elapsed time, estimated cost, and your subscription windows when Claude Code passes them along: `5h 37% ↺ 2h23m` is how much of the 5-hour window is used and when it resets; `7d` is the week.
+**Header.** Branch → base, then the mode or the state (`auto`, `manual`, `2 need you`, `passed`), elapsed time, estimated cost, and your subscription windows when Claude Code passes them along: `5h 37% ↺ 2h23m` is how much of the 5-hour window is used and when it resets; `7d` is the week.
 
-**While reviewing** — one bar per agent call, filling as it runs:
+**While reviewing.** One bar per agent call, filling as it runs:
 
 ```
       ─ review        ████████▊░░░░     –   opus      1m12s
@@ -146,27 +146,27 @@ With `dispatch = "parallel"` there's a bar per lens, and with `passes` a bar per
       ╰ tests        ██████▎░░░░░░     –   sonnet  1m04s
 ```
 
-**After the review** — the gate track replaces the bars (✓ passed · ∴ now · ○ ahead), with the loop row under it:
+**After the review.** The gate track replaces the bars (✓ passed · ∴ now · ○ ahead), with the loop row under it:
 
 ```
 gates ✓ review ─ ✓ decide ─ ✓ fix ─ ✓ check ─ ∴ verify ─ ○ push ─ ○ pr ─ ○ ci
  loop ● ● ○  round 2/3      2 open · 5 fixed · 0 filed
 ```
 
-**Waiting on you** (manual mode) — the count, and the exact command:
+**Waiting on you** (manual mode). The count, and the exact command:
 
 ```
   lgtm ▸ worktree-sync-throttle → main   2 need you   3m16s   ≈$0.62
     → lgtm -b worktree-sync-throttle · or /lgtm in Claude Code
 ```
 
-**PR open** — the PR number (a link) and CI as it comes in:
+**PR open.** The PR number (a link) and CI as it comes in:
 
 ```
    ci ◍ #126   ▰▰▱▱   check 2/4 · 1m12s
 ```
 
-**Idle** — your last twenty runs as a sparkline, and how many in a row shipped without needing you:
+**Idle.** Your last twenty runs as a sparkline, and how many in a row shipped without needing you:
 
 ```
   lgtm ▸ main   idle   12 runs today   5h 37% ↺ 2h23m · 7d 61% ↺ 3d04h
