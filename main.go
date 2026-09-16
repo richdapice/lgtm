@@ -24,7 +24,6 @@ import (
 	"github.com/richdapice/lgtm/internal/config"
 	"github.com/richdapice/lgtm/internal/finding"
 	"github.com/richdapice/lgtm/internal/gitx"
-	"github.com/richdapice/lgtm/internal/hook"
 	"github.com/richdapice/lgtm/internal/render"
 	"github.com/richdapice/lgtm/internal/run"
 	"github.com/richdapice/lgtm/internal/setup"
@@ -86,12 +85,6 @@ func main() {
 		err = cmdDoctor(ctx)
 	case "push":
 		err = cmdPush(ctx, args, logger)
-	case "hook":
-		if len(args) > 0 && args[0] == "pre-push" {
-			cwd, _ := os.Getwd()
-			os.Exit(hook.PrePush(ctx, cwd, os.Stdin, os.Stderr, logger))
-		}
-		fatal("usage: lgtm hook pre-push (called by git)")
 	case "demo":
 		if len(args) > 0 && args[0] == "bar" {
 			err = tui.DemoBar(ctx)
@@ -147,7 +140,6 @@ REVIEW
 
 PUSH
   lgtm push [--manual]         review and fix, then push the branch; no PR opened
-  lgtm init --hook             the same on every plain git push (see README)
 
 ACT ON A WAITING RUN
   lgtm status [--json]         where the run is: phase, counts, cost
@@ -159,7 +151,6 @@ ACT ON A WAITING RUN
 
 SETUP
   lgtm init [-y]               detect your projects, write .lgtm.toml
-    --hook                     review and fix on every git push (pre-push hook)
     --statusline               add the live bar to Claude Code's status line
     --skill                    install the /lgtm skill for Claude Code
   lgtm doctor                  check each configured agent answers
@@ -400,7 +391,6 @@ func cmdInit(ctx context.Context, args []string) error {
 	yes := fs.Bool("y", false, "accept detected defaults without asking")
 	bar := fs.Bool("statusline", false, "add lgtm to Claude Code's status bar (~/.claude/settings.json)")
 	sk := fs.Bool("skill", false, "install the /lgtm skill for Claude Code (~/.claude/skills/lgtm)")
-	hk := fs.Bool("hook", false, "review and fix on every git push (installs a pre-push hook)")
 	fs.Parse(args)
 	cwd, _ := os.Getwd()
 	root, err := gitx.Root(ctx, cwd)
@@ -438,13 +428,6 @@ func cmdInit(ctx context.Context, args []string) error {
 		} else {
 			fmt.Println("skill: up to date")
 		}
-	}
-	if *hk {
-		path, err := hook.Install(ctx, root)
-		if err != nil {
-			return err
-		}
-		fmt.Println("hook: every push to this repo is reviewed first —", path)
 	}
 	fmt.Println("next: lgtm doctor")
 	return nil

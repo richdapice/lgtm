@@ -139,16 +139,13 @@ Autopilot is the default. It doesn't ask: every finding goes to the agent with t
 
 `--plain` swaps the panel for line prompts, which is also what you get when stdout isn't a terminal.
 
-## On every push
+## Push without opening a PR
 
 ```sh
-lgtm push            # review, fix, commit, then git push — one command, no PR
-lgtm init --hook     # or: make plain `git push` do the same, every time
+lgtm push            # review, fix, commit, then git push — one command
 ```
 
-`lgtm push` is the simple one: it does the review before the push, so what goes up is what was fixed. The hook is for when you'd rather keep typing `git push`.
-
-The hook installs as `pre-push`, so every `git push` in the repo is reviewed and fixed first, without asking — autopilot, review only, no PR. Nothing leaves until it's been read. Git has already chosen the commit by the time a hook runs, so if lgtm commits fixes it stops the push and says `push again`; the second push is instant, because a tree that's been through a full run is remembered. Pushing the base branch passes straight through, and `git push --no-verify` skips it when you mean to.
+Same review as `lgtm`, stopping before the PR. What goes up is what was fixed. A tree that's already been through a run is remembered, so pushing it again is instant.
 
 ## From anywhere
 
