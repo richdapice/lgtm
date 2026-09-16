@@ -4,15 +4,15 @@
 
 <p align="center"><img src="docs/hero.svg" alt="a pull request gets reviewed, fixed, and stamped LGTM" width="960"></p>
 
-Most of the code in a branch today was written by an AI, and it needs a harder review than human code, not a softer one. It compiles, it looks clean, and it hides things:
+Most of the code in a branch today was written by an AI, and it needs a harder review than human code. It compiles, it looks clean, and it hides things:
 
 - AI-assisted pull requests carry **1.7× the defects** of human-only ones; logic and control-flow mistakes are 75% more frequent. ([CodeRabbit](https://www.coderabbit.ai/blog/state-of-ai-vs-human-code-generation-report))
 - **44%** of AI code-generation tasks introduce a known vulnerability. ([Veracode, 2026](https://www.veracode.com/blog/2026-genai-code-security-report-ai-risk/))
-- Swallowed exceptions and empty catch blocks are up **47%**: code that fails silently instead of loudly. ([GitClear](https://www.gitclear.com/the_ai_code_quality_maintainability_gap))
+- Swallowed exceptions and empty catch blocks are up **47%**, so more code fails silently. ([GitClear](https://www.gitclear.com/the_ai_code_quality_maintainability_gap))
 
-84% of developers use AI tools; 29% trust what they produce. ([source](https://interclypse.com/happenings/the-ai-trust-gap-what-developers-actually-believe-about-ai-code)) The gap is a review nobody has time to do.
+84% of developers use AI tools; 29% trust what they produce. ([source](https://interclypse.com/happenings/the-ai-trust-gap-what-developers-actually-believe-about-ai-code)) Closing that gap means a careful review of every branch, and nobody has time for one.
 
-`lgtm` does that review, on every branch, before the PR exists. Four lenses read the diff the way a careful colleague would. What they find gets fixed, and because the fixer is an AI too, nothing it writes is trusted either: every fix runs through your own tests and lint before it's committed, and a fix that fails is thrown away. Then it opens the pull request. On autopilot it never asks you anything.
+`lgtm` does that review, on every branch, before the PR exists. Four lenses read the diff the way a careful colleague would. What they find gets fixed. The fixer is an AI too, so its work is checked the same way: every fix runs through your own tests and lint before it's committed, and a fix that fails is thrown away. Then it opens the pull request. On autopilot it never asks you anything.
 
 ```sh
 go install github.com/richdapice/lgtm@latest
@@ -27,7 +27,7 @@ Needs `git`, `gh` (logged in), and `claude` on your PATH.
 
 **A real review, before anyone else has to do one.** Four [lenses](#the-lenses) read the diff: correctness, your project's conventions, security, tests. Add your own in a line. The agent reads around the change, which is where the findings that matter come from.
 
-**Fixes that are proven, not just made.** Your own test and lint commands run on your diff before the review, and again on every fix. A fix that fails them is reverted. Nothing is committed that your checks didn't see.
+**Fixes that pass your own checks.** Your test and lint commands run on your diff before the review, and again on every fix. A fix that fails them is reverted, so nothing is committed that your checks didn't see.
 
 **A loop that always ends.** The review produces one fixed list of findings. Fix rounds can only shorten it. Three rounds, then it ships or hands the rest to you.
 
@@ -39,12 +39,12 @@ Needs `git`, `gh` (logged in), and `claude` on your PATH.
 
 ![the status bar through a whole run](docs/bar.gif)
 
-That's the run as Claude Code shows it: eight gates, in order.
+That's the run as Claude Code shows it: seven gates, in order.
 
-1. **check.** Your own test and lint commands run on the files your branch changed, before a single token is spent. A diff that doesn't pass its own checks is sent back, not reviewed.
-2. **review.** The [lenses](#the-lenses) read the diff between your branch and its base. The agent can read the rest of the repo while it thinks; that's where the good findings come from.
+1. **check.** Your own test and lint commands run on the files your branch changed, before a single token is spent. A diff that doesn't pass its own checks is sent back before any review.
+2. **review.** The [lenses](#the-lenses) read the diff between your branch and its base. The agent can read the rest of the repo while it thinks, which is where the good findings come from.
 3. **fix.** The agent edits your working tree. (In manual mode there's a **decide** gate first, where it asks you.)
-4. **recheck.** The same checks again, on the files it touched. A fix that fails them is reverted, not committed.
+4. **recheck.** The same checks again, on the files it touched. A fix that fails them is reverted.
 5. **verify.** Each fix is confirmed against the new diff. Anything still open goes around again, up to `max_fix_rounds`. The list of findings only ever gets shorter, so this always ends.
 6. **pr, ci.** It pushes, writes the PR body from the diff and the literal check output, opens the PR, reacts 👀, watches CI, reacts 👍.
 
@@ -104,7 +104,7 @@ lgtm init --statusline --skill      # once; applies to every repo
 
 ![the status bar mid-run](docs/bar.png)
 
-**The `/lgtm` skill.** Type `/lgtm` in any chat and Claude tells you what's waiting on a held run, records what you say ("accept the first, fix the second"), and continues it. No terminal, no finding the right worktree. It drives `lgtm decide` and `lgtm continue` underneath, which you can also run yourself from anywhere with `-b BRANCH`.
+**The `/lgtm` skill.** Type `/lgtm` in any chat and Claude tells you what's waiting on a held run, records what you say ("accept the first, fix the second"), and continues it. You never open a terminal or hunt for the right worktree. It drives `lgtm decide` and `lgtm continue` underneath, which you can also run yourself from anywhere with `-b BRANCH`.
 
 Every row of the bar is explained in [The status bar](docs/status-bar.md); the commands the skill uses are in [Commands](docs/commands.md).
 
@@ -123,9 +123,9 @@ All of it in [Configuration](docs/configuration.md). Manual mode's panel and key
 
 ## Guarantees
 
-- **It never holds your branch.** No proxy remote, no mirror ref, no holding area. It reads git and calls `gh`, so nothing can get stuck.
-- **It never reviews the same diff twice.** One review, one list, and the list only gets shorter. That's why it always finishes.
-- **It never ships what your checks didn't see.** A fix changes the tree, the checks run again, or nothing is committed.
+- **It never holds your branch.** There is no proxy remote, mirror ref, or holding area. It reads git and calls `gh`, so nothing can get stuck.
+- **It never reviews the same diff twice.** One review produces one list, and the list only gets shorter, which is why it always finishes.
+- **It never ships what your checks didn't see.** When a fix changes the tree, the checks run again before anything is committed.
 - **It never runs your code.** Neither agent can execute anything. Only your configured checks do.
 
 ## Costs
@@ -134,6 +134,6 @@ The `≈$` figures are estimates at API list price. On a Claude Pro or Max subsc
 
 ## Status
 
-Young. It has opened real PRs on a real Electron monorepo. If something surprises you, it's probably a bug: open an issue with the debug log (`LGTM_DEBUG=/tmp/lgtm.log lgtm`).
+Young. It has opened real PRs on a real Electron monorepo. If something surprises you, it's probably a bug, so open an issue with the debug log (`LGTM_DEBUG=/tmp/lgtm.log lgtm`).
 
 MIT.
