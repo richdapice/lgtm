@@ -15,7 +15,9 @@ git checkout -b my-change  # ...commit your work...
 lgtm                 # review, fix, open the PR
 ```
 
-You need `git`, `gh` logged in, and `claude` on your PATH (or another agent; see [Agents](#agents)).
+Needs `git`, `gh` (logged in), and `claude` on your PATH. Other agents: see [Agents](#agents).
+
+**Contents:** [What happens](#what-happens-when-you-run-lgtm) · [Commands](#commands) · [Autopilot and manual](#autopilot-and-manual) · [The status bar](#the-status-bar) · [From anywhere](#from-anywhere) · [Configuration](#configuration) · [Costs](#costs) · [Guarantees](#guarantees) · [Questions](#questions)
 
 ## What happens when you run `lgtm`
 
@@ -54,24 +56,33 @@ When it's through:
 
 ## Commands
 
-| Command | What it does |
+| | |
 |---|---|
 | `lgtm` | Review, fix, open the PR, watch CI. Autopilot. |
-| `lgtm --manual` | The same, but the panel asks you about each finding. |
+| `lgtm --manual` | The same, but it asks you about each finding. |
 | `lgtm push` | Review and fix, then `git push`. No PR. |
 | `lgtm --no-pr` | Review and fix only. Nothing pushed. |
-| `lgtm --draft` | Open the PR as a draft. |
 | `lgtm -b BRANCH` | Any of the above, on a branch checked out in another worktree. |
+
+<details>
+<summary>Everything else</summary>
+
+| | |
+|---|---|
+| `lgtm --draft` | Open the PR as a draft. |
 | `lgtm status [--json]` | Where the run is: phase, counts, cost. |
 | `lgtm findings [--json]` | Every finding, with the fixer's notes. |
-| `lgtm decide ID fix\|accept\|dismiss\|skip` | Record a decision on a waiting run. No terminal needed. `-m "…"` gives the fixer a direction. |
+| `lgtm decide ID fix\|accept\|dismiss\|skip` | Record a decision on a waiting run, no terminal needed. `-m "…"` gives the fixer a direction. |
 | `lgtm continue [--auto]` | Apply recorded decisions and carry on. |
-| `lgtm dismiss ID` | Never show this finding again; it goes on a list committed with the repo. |
-| `lgtm init` | Detect projects, write `.lgtm.toml`. `--statusline` and `--skill` wire up Claude Code. |
+| `lgtm dismiss ID` | Never show this finding again. Goes on a list committed with the repo. |
+| `lgtm init` | Detect projects, write `.lgtm.toml`. `--statusline` and `--skill` wire up Claude Code (once, globally). |
 | `lgtm doctor` | Check each configured agent answers. |
-| `lgtm demo` · `lgtm demo bar` | A scripted run in the panel, or in the status bar. No agent, no repo. `--parallel`, `--passes N`. |
+| `lgtm demo` · `lgtm demo bar` | A scripted run in the panel or the status bar. No agent, no repo. `--parallel`, `--passes N`. |
+| `lgtm -h` | The same list, with every flag. |
 
 Exit codes: `0` done · `1` error · `2` findings need you (run `lgtm` again).
+
+</details>
 
 ## Autopilot and manual
 
@@ -126,9 +137,9 @@ lgtm init --statusline      # adds it to Claude Code's status line
 
 ![the status bar mid-run](docs/bar.png)
 
-It renders in about four milliseconds, from a state file the run writes as it goes, so it costs nothing and never blocks. It shows in every Claude Code session, and it changes shape with the run.
+It renders in about four milliseconds from a state file the run writes as it goes, so it costs nothing and never blocks. It shows in every Claude Code session and changes shape with the run.
 
-**Header.** Branch → base, then the mode or the state (`auto`, `manual`, `2 need you`, `passed`), elapsed time, estimated cost, and your subscription windows when Claude Code passes them along: `5h 37% ↺ 2h23m` is how much of the 5-hour window is used and when it resets; `7d` is the week.
+**Header.** Branch → base, the state (`auto`, `manual`, `2 need you`, `passed`), elapsed, estimated cost, and your subscription windows when Claude Code passes them along: `5h 37% ↺ 2h23m` is how much of the 5-hour window is used and when it resets; `7d` is the week.
 
 **While reviewing.** One bar per agent call, filling as it runs:
 
@@ -172,7 +183,7 @@ gates ✓ check ─ ✓ review ─ ✓ fix ─ ✓ recheck ─ ∴ verify ─ �
       20 runs  ▂▃▂▅▂▂▇▃▂▂▄▂▃▂▂▃▅▂▂▃  median 2m38s · 3 held · streak 4
 ```
 
-Several runs at once (one per worktree) collapse to a line each. `lgtm demo bar` plays the whole sequence with no agent; `--parallel` and `--passes 2` show the other review shapes.
+Several runs at once (one per worktree) collapse to a line each. `lgtm demo bar` plays the whole thing with no agent.
 
 ![the status bar through a whole run](docs/bar.gif)
 
@@ -190,14 +201,26 @@ lgtm continue -b my-branch              # apply what's recorded, run the round, 
 
 ## Configuration
 
-`lgtm init` writes `.lgtm.toml` at the repo root. Everything has a default; you only write the lines you want to change.
+`lgtm init` writes `.lgtm.toml` at the repo root, per repo. Everything has a default, so a working config is short:
+
+```toml
+[lgtm]
+mode = "auto"
+
+[[project]]
+path = "."
+test = "npx vitest related {files} --run"
+lint = "npm run typecheck && npx eslint {files}"
+```
+
+The rest of this section is what else you can set.
 
 ### Mode and rounds
 
 ```toml
 [lgtm]
 mode = "auto"            # auto | manual
-max_fix_rounds = 3       # decide → fix → check → verify cycles before it stops
+max_fix_rounds = 3       # fix → recheck → verify cycles before it stops
 ```
 
 ### The review
@@ -242,9 +265,9 @@ lint = "swiftlint lint --strict"
 suite = "xcodebuild test -scheme App -destination 'platform=iOS Simulator,name=iPhone 16' -quiet"
 ```
 
-`test` and `lint` run at every check. `suite` is for the slow whole-project run that can't be scoped to changed files: it runs once, after the fix rounds and before anything is pushed. A failed suite opens the PR as a draft with the output in the body, and `lgtm push` refuses to push.
+`test` and `lint` run at `check` (on your diff, before the review) and at every `recheck` (on what the fixer touched). A fix round that no check validated is not committed. `suite` is for a slow whole-project run that can't be scoped to changed files: once, after the fix rounds, before anything is pushed. A failed suite opens the PR as a draft with the output in the body, and `lgtm push` refuses to push.
 
-`init` detects these from `package.json`, `go.mod`, `pyproject.toml`, and `Cargo.toml`, two levels deep. These commands are the floor: they run on your diff before the review and on every fix after it. A fix round that no check validated is not committed.
+`init` proposes these from `package.json`, `go.mod`, `pyproject.toml`, and `Cargo.toml`, two levels deep; anything else you write by hand.
 
 ### The pull request
 
@@ -285,12 +308,26 @@ Two commands per agent because reviewing and fixing are different jobs: the revi
 
 The `≈$` figures are what a call would cost at API list price, worked out locally. On a Claude Pro or Max subscription they aren't charges; usage counts against the 5-hour and 7-day windows the status bar shows. On a metered agent they're real, and `max_budget_usd` is the cap. A review of a small diff lands around a dollar or two, most of it the agent reading around the change.
 
-## What it will never do
+## Guarantees
+
+Things it will never do:
 
 - Hold your branch. No proxy remote, no mirror ref, no holding area. It reads git and calls `gh`, so nothing can get stuck.
 - Review the same diff twice. One review into a fixed list; after that it only checks whether items were addressed, and the list only gets shorter. New things it notices during a fix round get written down, not added. That's why it always finishes.
 - Ship something your checks didn't see. A fix changes the tree; the checks run again, or nothing is committed.
 - Run your code. Neither agent can execute anything. Only your configured checks do.
+
+## Questions
+
+**Does it run my tests?** Twice: on your diff before the review, and on every fix after it, scoped to changed files where the runner allows (`vitest related`, `jest --findRelatedTests`). A slow whole-suite command goes in `suite` and runs once before the PR.
+
+**What's per repo and what's global?** `.lgtm.toml` is per repo and committed. The status bar, the `/lgtm` skill, and your agents (`~/.config/lgtm/config.toml`) are global, set up once.
+
+**What does it cost on a Claude subscription?** Nothing extra; it uses your plan's windows, which the bar shows. See [Costs](#costs).
+
+**Can I add a lens?** Yes: `[lens.name] prompt = "what to look for"`. See [The review](#the-review).
+
+**Can I use it without a terminal?** `lgtm decide` and `lgtm continue` work from anywhere, and `/lgtm` in Claude Code drives them. See [From anywhere](#from-anywhere).
 
 ## Scripting it
 
