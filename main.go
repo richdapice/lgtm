@@ -84,6 +84,8 @@ func main() {
 		err = cmdDismiss(ctx, args)
 	case "doctor":
 		err = cmdDoctor(ctx)
+	case "push":
+		err = cmdPush(ctx, args, logger)
 	case "hook":
 		if len(args) > 0 && args[0] == "pre-push" {
 			cwd, _ := os.Getwd()
@@ -126,6 +128,7 @@ USAGE
 
 EXAMPLES
   lgtm                         autopilot: review, fix, open the PR, watch CI
+  lgtm push                    review, fix, then git push — no PR
   lgtm --manual                the same, but ask me about each finding
   lgtm --no-pr                 review only; nothing pushed
   lgtm -b my-branch            act on that branch from anywhere in the repo
@@ -141,6 +144,10 @@ REVIEW
     --intent TEXT              what the change is for (default: the commit messages)
     --plain                    line prompts instead of the panel
     -b BRANCH                  any worktree of this repo
+
+PUSH
+  lgtm push [--manual]         review and fix, then push the branch; no PR opened
+  lgtm init --hook             the same on every plain git push (see README)
 
 ACT ON A WAITING RUN
   lgtm status [--json]         where the run is: phase, counts, cost
@@ -522,6 +529,47 @@ func cmdDecide(ctx context.Context, args []string) error {
 }
 
 // cmdContinue resumes a held run with recorded decisions, no terminal needed.
+// cmdPush is the one-command version of the hook: review, fix, commit, then
+// push whatever HEAD ended up being. No PR, no second push, no hook trickery.
+func cmdPush(ctx context.Context, args []string, logger *log.Logger) error {
+	args = flagsFirst(args)
+	fs := flag.NewFlagSet("push", flag.ExitOnError)
+	manual := fs.Bool("manual", false, "ask about each finding instead of autopilot")
+	branch := fs.String("b", "", "branch (any worktree of this repo)")
+	fs.Parse(args)
+	cwd, err := dirFor(ctx, *branch)
+	if err != nil {
+		return err
+	}
+	root, err := gitx.Root(ctx, cwd)
+	if err != nil {
+		return err
+	}
+	b, err := gitx.Branch(ctx, root)
+	if err != nil {
+		return err
+	}
+	tree, _ := gitx.TreeHash(ctx, root, "HEAD")
+	common, _ := gitx.CommonDir(ctx, root)
+	if run.Reviewed(common, tree) {
+		fmt.Printf("%s already reviewed\n", b)
+	} else {
+		err := ceremony.Run(ctx, ceremony.Options{Dir: root, NoPR: true, Manual: *manual, Log: logger})
+		if errors.Is(err, ceremony.ErrOnBase) {
+			// nothing to review on the base branch; just push
+		} else if err != nil {
+			return err
+		}
+	}
+	// the hook would run again here and short-circuit on the reviewed tree;
+	// skip it outright so the push is one step
+	if _, err := gitx.Run(ctx, root, "push", "--no-verify", "-u", "origin", b); err != nil {
+		return err
+	}
+	fmt.Printf("pushed %s\n", b)
+	return nil
+}
+
 func cmdContinue(ctx context.Context, args []string, logger *log.Logger) error {
 	args = flagsFirst(args)
 	fs := flag.NewFlagSet("continue", flag.ExitOnError)
