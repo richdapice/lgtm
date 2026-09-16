@@ -1,5 +1,7 @@
 # Commands
 
+![lgtm on autopilot, in the terminal](demo.gif)
+
 | | |
 |---|---|
 | `lgtm` | Review, fix, open the PR, watch CI. Autopilot. |

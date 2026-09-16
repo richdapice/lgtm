@@ -37,24 +37,18 @@ Needs `git`, `gh` (logged in), and `claude` on your PATH.
 
 ## What happens when you run `lgtm`
 
-![lgtm on autopilot: check, review, fix, recheck, verify, the PR, the stamp](docs/demo.gif)
+![the status bar through a whole run](docs/bar.gif)
 
-```
- lgtm · worktree-sync-throttle → main      ⠋ fix · round 2 of 3      ≈$0.62
+That's the run as Claude Code shows it: eight gates, in order.
 
- GATES
-   ✓ check     your checks, on the diff
-   ✓ review    4 lenses · 7 found
-   ⠋ fix       agent working on 3 finding(s)
-   ○ recheck
-   ○ verify
-   ○ pr
-   ○ ci
+1. **check.** Your own test and lint commands run on the files your branch changed, before a single token is spent. A diff that doesn't pass its own checks is sent back, not reviewed.
+2. **review.** The [lenses](#the-lenses) read the diff between your branch and its base. The agent can read the rest of the repo while it thinks; that's where the good findings come from.
+3. **fix.** The agent edits your working tree. (In manual mode there's a **decide** gate first, where it asks you.)
+4. **recheck.** The same checks again, on the files it touched. A fix that fails them is reverted, not committed.
+5. **verify.** Each fix is confirmed against the new diff. Anything still open goes around again, up to `max_fix_rounds`. The list of findings only ever gets shorter, so this always ends.
+6. **pr, ci.** It pushes, writes the PR body from the diff and the literal check output, opens the PR, reacts 👀, watches CI, reacts 👍.
 
- ROUNDS  ● ◐ ○    round 1: 3 fixed · 1 filed · 3 open
-```
-
-Eight gates. `check` is your commands on your diff. `review` is the agent reading it. `fix → recheck → verify` is the loop: the agent edits, your checks run on what it touched, each fix is confirmed against the new diff. Then `pr` and `ci`. When it's through:
+When it's through:
 
 ```
   ╭──────╮
