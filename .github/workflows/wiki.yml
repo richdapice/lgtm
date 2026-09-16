@@ -1,0 +1,30 @@
+name: wiki
+
+on:
+  push:
+    branches: [main]
+    paths: [docs/**, scripts/sync-wiki.sh]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}.wiki
+          path: wiki
+      - run: scripts/sync-wiki.sh wiki
+      - name: push
+        working-directory: wiki
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m "sync docs from ${GITHUB_SHA::7}"
+          git push

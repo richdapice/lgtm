@@ -2,6 +2,8 @@
 
 **Get to LGTM before you open the PR.**
 
+[![ci](https://github.com/richdapice/lgtm/actions/workflows/ci.yml/badge.svg)](https://github.com/richdapice/lgtm/actions/workflows/ci.yml) [![release](https://img.shields.io/github/v/release/richdapice/lgtm)](https://github.com/richdapice/lgtm/releases/latest)
+
 <p align="center"><img src="docs/hero.svg" alt="a pull request gets reviewed, fixed, and stamped LGTM" width="960"></p>
 
 Most of the code in a branch today was written by an AI, and it needs a harder review than human code. It compiles, it looks clean, and it hides things:
@@ -21,7 +23,7 @@ git checkout -b my-change        # ...commit your work...
 lgtm                             # review, fix, open the PR
 ```
 
-Needs `git`, `gh` (logged in), and `claude` on your PATH.
+Prebuilt binaries for macOS and Linux are on the [releases page](https://github.com/richdapice/lgtm/releases/latest). Either way it needs `git`, `gh` (logged in), and `claude` on your PATH.
 
 ## What you get
 
@@ -92,7 +94,7 @@ Turn a built-in off with `enabled = false`, rewrite its prompt the same way, or 
 | `lgtm --manual` | The same, but it asks you about each finding in a panel. |
 | `lgtm push` | Review and fix, then `git push`. No PR. |
 
-Everything else is in [Commands](docs/commands.md).
+Everything else is in [Commands](docs/commands.md), and the whole reference is in [docs](docs/README.md) and on the [wiki](https://github.com/richdapice/lgtm/wiki).
 
 ## Inside Claude Code
 
