@@ -6,32 +6,30 @@
 
     /* 10 s loop. Everything keys off the same clock. */
     @keyframes eyes   { 0%,8% {opacity:0; transform:translateY(6px)} 12%,100% {opacity:1; transform:translateY(0)} }
-    @keyframes find1  { 0%,14% {fill:#30363d} 18%,40% {fill:var(--amber)} 46%,100% {fill:var(--add)} }
-    @keyframes find2  { 0%,20% {fill:#30363d} 24%,44% {fill:var(--amber)} 50%,100% {fill:var(--add)} }
-    @keyframes lens   { 0%,12% {opacity:0} 16%,48% {opacity:1} 54%,100% {opacity:0} }
-    @keyframes sweep  { 0%,14% {transform:translateX(0)} 50%,100% {transform:translateX(380px)} }
+    @keyframes find1  { 0%,11% {fill:#30363d} 12%,31% {fill:var(--amber)} 32%,100% {fill:var(--add)} }
+    @keyframes find2  { 0%,14% {fill:#30363d} 15%,49% {fill:var(--amber)} 50%,100% {fill:var(--add)} }
+    @keyframes lens   { 0%,8% {opacity:0} 10%,17% {opacity:1} 19%,100% {opacity:0} }
+    @keyframes sweep  { 0%,9% {transform:translateX(0)} 17%,100% {transform:translateX(380px)} }
     @keyframes stamp  { 0%,56% {opacity:0; transform:rotate(-14deg) scale(2.6)} 61% {opacity:1; transform:rotate(-14deg) scale(.92)} 64% {transform:rotate(-14deg) scale(1.06)} 67%,100% {opacity:1; transform:rotate(-14deg) scale(1)} }
     @keyframes shake  { 0%,60% {transform:translate(0,0)} 62% {transform:translate(0,3px)} 64% {transform:translate(0,-1px)} 66%,100% {transform:translate(0,0)} }
     @keyframes splat  { 0%,60% {opacity:0; transform:scale(.2)} 63% {opacity:.9; transform:scale(1)} 80%,100% {opacity:0; transform:scale(1.3)} }
-    @keyframes g0 { 0%,8% {fill:#30363d} 8.5%,16% {fill:#58a6ff} 16.5%,100% {fill:#3fb950} }
-    @keyframes g1 { 0%,16% {fill:#30363d} 16.5%,22% {fill:#58a6ff} 22.5%,38% {fill:#3fb950} 38.5%,42% {fill:#58a6ff} 42.5%,100% {fill:#3fb950} }
-    @keyframes g2 { 0%,22% {fill:#30363d} 22.5%,30% {fill:#58a6ff} 30.5%,38% {fill:#3fb950} 38.5%,42% {fill:#30363d} 42.5%,48% {fill:#58a6ff} 48.5%,100% {fill:#3fb950} }
-    @keyframes g3 { 0%,30% {fill:#30363d} 30.5%,34% {fill:#58a6ff} 34.5%,38% {fill:#3fb950} 38.5%,48% {fill:#30363d} 48.5%,52% {fill:#58a6ff} 52.5%,100% {fill:#3fb950} }
-    @keyframes g4 { 0%,34% {fill:#30363d} 34.5%,38% {fill:#58a6ff} 38.5%,38% {fill:#3fb950} 38.5%,52% {fill:#30363d} 52.5%,56% {fill:#58a6ff} 56.5%,100% {fill:#3fb950} }
-    @keyframes g5 { 0%,56% {fill:#30363d} 56.5%,60% {fill:#58a6ff} 60.5%,100% {fill:#3fb950} }
-    @keyframes g6 { 0%,60% {fill:#30363d} 60.5%,66% {fill:#58a6ff} 66.5%,100% {fill:#3fb950} }
-    @keyframes g7 { 0%,66% {fill:#30363d} 66.5%,90% {fill:#58a6ff} 90.5%,100% {fill:#3fb950} }
-    @keyframes l0 { 0%,8% {fill:#8b949e} 8.5%,100% {fill:#e6edf3} }
-    @keyframes l1 { 0%,16% {fill:#8b949e} 16.5%,100% {fill:#e6edf3} }
-    @keyframes l2 { 0%,22% {fill:#8b949e} 22.5%,100% {fill:#e6edf3} }
-    @keyframes l3 { 0%,30% {fill:#8b949e} 30.5%,100% {fill:#e6edf3} }
-    @keyframes l4 { 0%,34% {fill:#8b949e} 34.5%,100% {fill:#e6edf3} }
+    @keyframes g0 { 0%,4% {fill:#30363d} 4.5%,9% {fill:#58a6ff} 9.5%,100% {fill:#3fb950} }
+    @keyframes g1 { 0%,9% {fill:#30363d} 9.5%,17% {fill:#58a6ff} 17.5%,100% {fill:#3fb950} }
+    @keyframes g2 { 0%,17% {fill:#30363d} 17.5%,26% {fill:#58a6ff} 26.5%,38% {fill:#3fb950} 38.5%,45% {fill:#58a6ff} 45.5%,100% {fill:#3fb950} }
+    @keyframes g3 { 0%,26% {fill:#30363d} 26.5%,32% {fill:#58a6ff} 32.5%,38% {fill:#3fb950} 38.5%,45% {fill:#30363d} 45.5%,50% {fill:#58a6ff} 50.5%,100% {fill:#3fb950} }
+    @keyframes g4 { 0%,32% {fill:#30363d} 32.5%,38% {fill:#58a6ff} 38.5%,38% {fill:#3fb950} 38.5%,50% {fill:#30363d} 50.5%,56% {fill:#58a6ff} 56.5%,100% {fill:#3fb950} }
+    @keyframes g5 { 0%,56% {fill:#30363d} 56.5%,66% {fill:#58a6ff} 66.5%,100% {fill:#3fb950} }
+    @keyframes g6 { 0%,66% {fill:#30363d} 66.5%,90% {fill:#58a6ff} 90.5%,100% {fill:#3fb950} }
+    @keyframes l0 { 0%,4% {fill:#8b949e} 4.5%,100% {fill:#e6edf3} }
+    @keyframes l1 { 0%,9% {fill:#8b949e} 9.5%,100% {fill:#e6edf3} }
+    @keyframes l2 { 0%,17% {fill:#8b949e} 17.5%,100% {fill:#e6edf3} }
+    @keyframes l3 { 0%,26% {fill:#8b949e} 26.5%,100% {fill:#e6edf3} }
+    @keyframes l4 { 0%,32% {fill:#8b949e} 32.5%,100% {fill:#e6edf3} }
     @keyframes l5 { 0%,56% {fill:#8b949e} 56.5%,100% {fill:#e6edf3} }
-    @keyframes l6 { 0%,60% {fill:#8b949e} 60.5%,100% {fill:#e6edf3} }
-    @keyframes l7 { 0%,66% {fill:#8b949e} 66.5%,100% {fill:#e6edf3} }
-    @keyframes loopArc { 0%,15% {opacity:0} 17%,55% {opacity:1} 57%,100% {opacity:0} }
+    @keyframes l6 { 0%,66% {fill:#8b949e} 66.5%,100% {fill:#e6edf3} }
+    @keyframes loopArc { 0%,16% {opacity:0} 18%,55% {opacity:1} 57%,100% {opacity:0} }
     @keyframes loopRun { 0% {stroke-dashoffset:0} 100% {stroke-dashoffset:-240} }
-    @keyframes round1  { 0%,15% {opacity:0} 17%,37% {opacity:1} 38%,100% {opacity:0} }
+    @keyframes round1  { 0%,16% {opacity:0} 18%,37% {opacity:1} 38%,100% {opacity:0} }
     @keyframes round2  { 0%,37% {opacity:0} 39%,55% {opacity:1} 57%,100% {opacity:0} }
     @keyframes thumb  { 0%,90% {opacity:0; transform:translateY(6px)} 93%,100% {opacity:1; transform:translateY(0)} }
     @keyframes fade   { 0%,96% {opacity:1} 100% {opacity:0} }
@@ -45,7 +43,7 @@
     #stamp  { animation-name: stamp; transform-origin: 700px 170px; animation-timing-function: cubic-bezier(.2,.9,.3,1.2); }
     #card   { animation-name: shake; }
     .splat  { animation-name: splat; transform-origin: 700px 170px; }
-    #g0 { animation-name: g0; animation-timing-function: steps(1) } #l0 { animation-name: l0; animation-timing-function: steps(1) } #g1 { animation-name: g1; animation-timing-function: steps(1) } #l1 { animation-name: l1; animation-timing-function: steps(1) } #g2 { animation-name: g2; animation-timing-function: steps(1) } #l2 { animation-name: l2; animation-timing-function: steps(1) } #g3 { animation-name: g3; animation-timing-function: steps(1) } #l3 { animation-name: l3; animation-timing-function: steps(1) } #g4 { animation-name: g4; animation-timing-function: steps(1) } #l4 { animation-name: l4; animation-timing-function: steps(1) } #g5 { animation-name: g5; animation-timing-function: steps(1) } #l5 { animation-name: l5; animation-timing-function: steps(1) } #g6 { animation-name: g6; animation-timing-function: steps(1) } #l6 { animation-name: l6; animation-timing-function: steps(1) } #g7 { animation-name: g7; animation-timing-function: steps(1) } #l7 { animation-name: l7; animation-timing-function: steps(1) }
+    #g0 { animation-name: g0; animation-timing-function: steps(1) } #l0 { animation-name: l0; animation-timing-function: steps(1) } #g1 { animation-name: g1; animation-timing-function: steps(1) } #l1 { animation-name: l1; animation-timing-function: steps(1) } #g2 { animation-name: g2; animation-timing-function: steps(1) } #l2 { animation-name: l2; animation-timing-function: steps(1) } #g3 { animation-name: g3; animation-timing-function: steps(1) } #l3 { animation-name: l3; animation-timing-function: steps(1) } #g4 { animation-name: g4; animation-timing-function: steps(1) } #l4 { animation-name: l4; animation-timing-function: steps(1) } #g5 { animation-name: g5; animation-timing-function: steps(1) } #l5 { animation-name: l5; animation-timing-function: steps(1) } #g6 { animation-name: g6; animation-timing-function: steps(1) } #l6 { animation-name: l6; animation-timing-function: steps(1) }
     #arc    { animation-name: loopArc; }
     #arcRun { animation: loopRun 2.4s linear infinite; }
     #round1 { animation-name: round1; } #round2 { animation-name: round2; }
@@ -88,22 +86,21 @@
 
       <!-- the gate track: what lgtm actually does, in order -->
     <g font-size="11.5" font-weight="500">
-        <circle id="g0" class="anim" cx="72" cy="248" r="5"/><text id="l0" class="anim" x="83" y="252">review</text>
-        <circle id="g1" class="anim" cx="142" cy="248" r="5"/><text id="l1" class="anim" x="153" y="252">decide</text>
-        <circle id="g2" class="anim" cx="212" cy="248" r="5"/><text id="l2" class="anim" x="223" y="252">fix</text>
-        <circle id="g3" class="anim" cx="282" cy="248" r="5"/><text id="l3" class="anim" x="293" y="252">check</text>
-        <circle id="g4" class="anim" cx="352" cy="248" r="5"/><text id="l4" class="anim" x="363" y="252">verify</text>
-        <circle id="g5" class="anim" cx="422" cy="248" r="5"/><text id="l5" class="anim" x="433" y="252">push</text>
-        <circle id="g6" class="anim" cx="492" cy="248" r="5"/><text id="l6" class="anim" x="503" y="252">pr</text>
-        <circle id="g7" class="anim" cx="562" cy="248" r="5"/><text id="l7" class="anim" x="573" y="252">ci</text>
+        <circle id="g0" class="anim" cx="72" cy="248" r="5"/><text id="l0" class="anim" x="83" y="252">check</text>
+        <circle id="g1" class="anim" cx="150" cy="248" r="5"/><text id="l1" class="anim" x="161" y="252">review</text>
+        <circle id="g2" class="anim" cx="228" cy="248" r="5"/><text id="l2" class="anim" x="239" y="252">fix</text>
+        <circle id="g3" class="anim" cx="306" cy="248" r="5"/><text id="l3" class="anim" x="317" y="252">check</text>
+        <circle id="g4" class="anim" cx="384" cy="248" r="5"/><text id="l4" class="anim" x="395" y="252">verify</text>
+        <circle id="g5" class="anim" cx="462" cy="248" r="5"/><text id="l5" class="anim" x="473" y="252">pr</text>
+        <circle id="g6" class="anim" cx="540" cy="248" r="5"/><text id="l6" class="anim" x="551" y="252">ci</text>
     </g>
 
     <!-- the loop: decide → fix → check → verify goes around until it's clean -->
     <g id="arc" class="anim">
-      <path id="arcRun" d="M 352 258 C 352 274, 142 274, 142 258" fill="none" stroke="#58a6ff" stroke-width="1.5" stroke-dasharray="6 5" opacity=".9"/>
-      <path d="M 138 262 L 142 256 L 146 262" fill="none" stroke="#58a6ff" stroke-width="1.5"/>
-      <text id="round1" class="anim" x="247" y="279" text-anchor="middle" font-size="10.5" fill="#8b949e">round 1 of 3</text>
-      <text id="round2" class="anim" x="247" y="279" text-anchor="middle" font-size="10.5" fill="#8b949e">round 2 of 3</text>
+      <path id="arcRun" d="M 384 258 C 384 274, 228 274, 228 258" fill="none" stroke="#58a6ff" stroke-width="1.5" stroke-dasharray="6 5" opacity=".9"/>
+      <path d="M 224 262 L 228 256 L 232 262" fill="none" stroke="#58a6ff" stroke-width="1.5"/>
+      <text id="round1" class="anim" x="306" y="279" text-anchor="middle" font-size="10.5" fill="#8b949e">round 1 of 3</text>
+      <text id="round2" class="anim" x="306" y="279" text-anchor="middle" font-size="10.5" fill="#8b949e">round 2 of 3</text>
     </g>
 
     <!-- reactions -->

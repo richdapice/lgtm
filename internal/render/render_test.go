@@ -162,7 +162,7 @@ func TestGateTrackRow(t *testing.T) {
 	r.Phase, r.Step, r.Round = run.Verify, "verify", 2
 	r.Findings.Close()
 	out := Render(Input{Runs: []*run.Run{r}, Now: now}, Style{Cols: 110})
-	if !strings.Contains(out, "gates ✓ review ─ ✓ decide ─ ✓ fix ─ ✓ check ─ ∴ verify ─ ○ push ─ ○ pr ─ ○ ci") {
+	if !strings.Contains(out, "gates ✓ check ─ ✓ review ─ ✓ decide ─ ✓ fix ─ ✓ check ─ ∴ verify ─ ○ pr ─ ○ ci") {
 		t.Fatalf("no gate track:\n%s", out)
 	}
 	if os.Getenv("SHOW") != "" {

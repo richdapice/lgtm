@@ -243,18 +243,18 @@ func single(r *run.Run, now time.Time, st Style, plan *PlanUsage) string {
 			rows = append(rows, row(st, "", lensRow(l, now, stem, st), "", ""))
 		}
 	}
-	if r.Step != "" && r.Step != "review" && r.Phase != run.Done {
+	if r.Step != "" && r.Step != "review" && r.Step != "floor" && r.Phase != run.Done {
 		var parts []string
 		reached := false
-		for _, g := range run.Gates {
+		for _, g := range run.VisibleGates(r.Mode) {
 			switch {
-			case g == r.Step && !reached:
+			case g.ID == r.Step && !reached:
 				reached = true
-				parts = append(parts, st.c(accent, "∴ "+g))
+				parts = append(parts, st.c(accent, "∴ "+g.Label))
 			case !reached:
-				parts = append(parts, st.c(good, "✓ ")+g)
+				parts = append(parts, st.c(good, "✓ ")+g.Label)
 			default:
-				parts = append(parts, st.c(dim, "○ "+g))
+				parts = append(parts, st.c(dim, "○ "+g.Label))
 			}
 		}
 		rows = append(rows, row(st, "gates", strings.Join(parts, st.c(dim, " ─ ")), "", ""))

@@ -91,6 +91,9 @@ func Prepare(ctx context.Context, o Options) (*Ceremony, error) { return prepare
 
 // Run executes a prepared ceremony.
 func (c *Ceremony) Run(ctx context.Context) error {
+	if err := c.floor(ctx); err != nil {
+		return c.fail(err)
+	}
 	if err := c.discover(ctx); err != nil {
 		return c.fail(err)
 	}
@@ -298,6 +301,31 @@ func (c *Ceremony) refreshDiff(ctx context.Context) error {
 	}
 	c.changed, err = gitx.ChangedFiles(ctx, c.root, c.mergeBase, "HEAD", ownFiles...)
 	return err
+}
+
+// floor runs your checks on the branch's own changes before any token is
+// spent. A diff that doesn't compile doesn't get reviewed; it gets sent back.
+func (c *Ceremony) floor(ctx context.Context) error {
+	if c.run.Findings.Closed {
+		return nil // resumed: the floor already passed
+	}
+	c.step("floor", fmt.Sprintf("%d changed file(s)", len(c.changed)))
+	checks := project.Run(ctx, c.root, project.Plan(c.repo, c.changed))
+	ok, skipped := project.AllOK(checks)
+	if skipped == len(checks) {
+		c.println("no checks configured for the changed files; `lgtm init` adds them")
+		return nil
+	}
+	if !ok {
+		if env := environmentFailure(checks); env != "" {
+			c.println("a check could not run in this worktree (%s); install dependencies here first", env)
+		} else {
+			c.println("your checks fail on this branch; fix them before review")
+		}
+		c.println("%s", checksText(checks))
+		return errors.New("checks failed before review")
+	}
+	return nil
 }
 
 // discover runs the lenses — one call or one per lens — into the closed set.
@@ -674,7 +702,7 @@ func (c *Ceremony) commitRound(ctx context.Context, touched []string, fixed []fi
 
 func (c *Ceremony) openPR(ctx context.Context) error {
 	c.run.Phase = run.PR
-	c.step("push", "origin/"+c.branch)
+	c.step("pr", "pushing "+c.branch)
 	if err := gitx.Push(ctx, c.root, "origin", c.branch); err != nil {
 		return err
 	}

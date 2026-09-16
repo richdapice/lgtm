@@ -71,8 +71,29 @@ type RoundSummary struct {
 	Reverted bool `json:"reverted,omitempty"`
 }
 
+// Gate is one stop on the track. Step values are IDs; the bar shows labels,
+// which is how "check" can appear twice: once as the floor, once per round.
+type Gate struct{ ID, Label string }
+
 // Gates is the track, in order. The decide→fix→check→verify stretch repeats.
-var Gates = []string{"review", "decide", "fix", "check", "verify", "push", "pr", "ci"}
+var Gates = []Gate{
+	{"floor", "check"}, {"review", "review"}, {"decide", "decide"},
+	{"fix", "fix"}, {"check", "check"}, {"verify", "verify"}, {"pr", "pr"}, {"ci", "ci"},
+}
+
+// VisibleGates drops decide on autopilot, where it never happens.
+func VisibleGates(mode string) []Gate {
+	if mode != "auto" {
+		return Gates
+	}
+	var out []Gate
+	for _, g := range Gates {
+		if g.ID != "decide" {
+			out = append(out, g)
+		}
+	}
+	return out
+}
 
 type PRInfo struct {
 	Number int    `json:"number"`

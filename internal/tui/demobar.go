@@ -33,7 +33,7 @@ func DemoBar(ctx context.Context, opt DemoBarOptions) error {
 		opt.Passes = 1
 	}
 	r := &run.Run{Branch: "worktree-sync-throttle", Base: "main", Mode: "auto", MaxRounds: 3, PID: os.Getpid(),
-		StartedAt: now, Phase: run.Discover, Step: "review"}
+		StartedAt: now, Phase: run.Discover, Step: "floor", StepNote: "2 changed files"}
 	switch {
 	case opt.Parallel:
 		for _, l := range []struct{ name, model string }{{"correctness", "opus"}, {"conventions", "haiku"}, {"security", "opus"}, {"tests", "sonnet"}} {
@@ -81,6 +81,11 @@ func DemoBar(ctx context.Context, opt DemoBarOptions) error {
 		}
 		return true
 	}
+	// the floor: your checks first
+	if !frame(1200 * time.Millisecond) {
+		return nil
+	}
+	r.Step = "review"
 	// review: the bars fill
 	switch {
 	case opt.Parallel:
@@ -161,11 +166,9 @@ func DemoBar(ctx context.Context, opt DemoBarOptions) error {
 	set.Transition(set.Findings[5].ID, finding.Accepted, 2)
 	set.Transition(set.Findings[6].ID, finding.Fixed, 2)
 	r.Rounds = append(r.Rounds, run.RoundSummary{Fixed: 1, Open: 0})
-	for _, g := range []string{"push", "pr"} {
-		r.Phase, r.Step = run.PR, g
-		if !frame(1000 * time.Millisecond) {
-			return nil
-		}
+	r.Phase, r.Step = run.PR, "pr"
+	if !frame(1800 * time.Millisecond) {
+		return nil
 	}
 	r.PR = &run.PRInfo{Number: 126, URL: "https://github.com/you/repo/pull/126"}
 	r.Phase, r.Step = run.CI, "ci"

@@ -21,23 +21,22 @@ You need `git`, `gh` logged in, and `claude` on your PATH (or another agent; see
 
 ![lgtm reviewing a branch in the terminal: findings, the gates, the stamp](docs/demo.gif)
 
-1. **review.** Four lenses read the diff between your branch and its base: correctness, your project's conventions (from `CLAUDE.md` / `AGENTS.md`), security, tests. The agent can read the rest of the repo while it thinks; that's where the good findings come from.
-2. **decide.** On autopilot this step is instant: every finding goes to the fixer with the judgement calls delegated. In manual mode, this is where it asks you.
-3. **fix.** The agent edits your working tree.
-4. **check.** Your own test and lint commands run on the files it touched. A fix that fails them is reverted, not committed.
+1. **check.** Your own test and lint commands run on the files your branch changed, before a single token is spent. A diff that doesn't pass its own checks is sent back, not reviewed.
+2. **review.** Four lenses read the diff between your branch and its base: correctness, your project's conventions (from `CLAUDE.md` / `AGENTS.md`), security, tests. The agent can read the rest of the repo while it thinks; that's where the good findings come from.
+3. **fix.** The agent edits your working tree. (In manual mode there's a **decide** gate first, where it asks you.)
+4. **check** again, on the files it touched. A fix that fails is reverted, not committed.
 5. **verify.** Each fix is confirmed against the new diff. Anything still open goes around again, up to `max_fix_rounds`. The list of findings only ever gets shorter, so this always ends.
-6. **push, pr, ci.** It pushes, writes the PR body from the diff and the literal check output, opens the PR, reacts 👀, watches CI, reacts 👍.
+6. **pr, ci.** It pushes, writes the PR body from the diff and the literal check output, opens the PR, reacts 👀, watches CI, reacts 👍.
 
 ```
  lgtm · worktree-sync-throttle → main      ⠋ fix · round 2 of 3      ≈$0.62
 
  GATES
+   ✓ check     your checks, on the diff
    ✓ review    4 lenses · 7 found
-   ✓ decide    3 fixed · 1 accepted · 0 dismissed
    ⠋ fix       agent working on 3 finding(s)
    ○ check
    ○ verify
-   ○ push
    ○ pr
    ○ ci
 
@@ -146,10 +145,10 @@ With `dispatch = "parallel"` there's a bar per lens, and with `passes` a bar per
       ╰ tests        ██████▎░░░░░░     –   sonnet  1m04s
 ```
 
-**After the review.** The gate track replaces the bars (✓ passed · ∴ now · ○ ahead), with the loop row under it:
+**After the review.** The gate track replaces the bars (✓ passed · ∴ now · ○ ahead), with the loop row under it. `check` appears twice on purpose: once on your diff before the review, once per fix round. `decide` shows only in manual mode.
 
 ```
-gates ✓ review ─ ✓ decide ─ ✓ fix ─ ✓ check ─ ∴ verify ─ ○ push ─ ○ pr ─ ○ ci
+gates ✓ check ─ ✓ review ─ ✓ fix ─ ✓ check ─ ∴ verify ─ ○ pr ─ ○ ci
  loop ● ● ○  round 2/3      2 open · 5 fixed · 0 filed
 ```
 
@@ -237,7 +236,7 @@ test = "npx vitest related {files} --run"    # {files} = the changed paths, rela
 lint = "npm run typecheck && npx eslint {files}"
 ```
 
-`init` detects these from `package.json`, `go.mod`, `pyproject.toml`, and `Cargo.toml`, two levels deep. A fix round that no check validated is not committed.
+`init` detects these from `package.json`, `go.mod`, `pyproject.toml`, and `Cargo.toml`, two levels deep. These commands are the floor: they run on your diff before the review and on every fix after it. A fix round that no check validated is not committed.
 
 ### The pull request
 

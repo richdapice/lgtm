@@ -330,16 +330,16 @@ func (m *model) progress() string {
 	r := m.run
 	b.WriteString("\n " + sSubtle.Render("GATES") + "\n")
 	reached := false
-	for _, g := range run.Gates {
-		mark, name, note := sFaint.Render("○"), sFaint.Render(pad(g, 8)), ""
+	for _, g := range run.VisibleGates(r.Mode) {
+		mark, name, note := sFaint.Render("○"), sFaint.Render(pad(g.Label, 8)), ""
 		switch {
-		case g == r.Step && !reached:
+		case g.ID == r.Step && !reached:
 			reached = true
-			mark, name = sAccent.Render(m.spin.View()), sAccent.Render(pad(g, 8))
+			mark, name = sAccent.Render(m.spin.View()), sAccent.Render(pad(g.Label, 8))
 			note = sSubtle.Render(r.StepNote)
 		case !reached:
-			mark, name = sGreen.Render("✓"), pad(g, 8)
-			note = sFaint.Render(gateSummary(g, r))
+			mark, name = sGreen.Render("✓"), pad(g.Label, 8)
+			note = sFaint.Render(gateSummary(g.ID, r))
 		}
 		fmt.Fprintf(&b, "   %s %s  %s\n", mark, name, note)
 	}
@@ -374,6 +374,8 @@ func (m *model) progress() string {
 func gateSummary(g string, r run.Run) string {
 	c := r.Findings.Counts()
 	switch g {
+	case "floor":
+		return "your checks, on the diff"
 	case "review":
 		n := len(r.Lenses)
 		if n == 1 {
@@ -387,8 +389,6 @@ func gateSummary(g string, r run.Run) string {
 			last := r.Rounds[len(r.Rounds)-1]
 			return fmt.Sprintf("round %d", len(r.Rounds)) + map[bool]string{true: " · reverted", false: fmt.Sprintf(" · %d confirmed", last.Fixed)}[last.Reverted]
 		}
-	case "push":
-		return "origin/" + r.Branch
 	case "pr":
 		if r.PR != nil {
 			return fmt.Sprintf("#%d", r.PR.Number)

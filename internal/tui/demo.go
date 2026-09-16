@@ -51,7 +51,7 @@ func Demo(ctx context.Context) error {
 
 	go func() {
 		r := run.Run{Branch: "worktree-sync-throttle", Base: "main", Mode: "manual", MaxRounds: 3,
-			StartedAt: time.Now(), Phase: run.Discover, Step: "review", StepNote: "4 lenses",
+			StartedAt: time.Now(), Phase: run.Discover, Step: "floor", StepNote: "2 changed files",
 			Lenses: []run.Lens{{Name: "review", Model: "opus", State: run.Running, StartedAt: time.Now()}}}
 		tick := func(d time.Duration) bool {
 			select {
@@ -63,6 +63,11 @@ func Demo(ctx context.Context) error {
 		}
 		send := func() { p.Send(updateMsg{r}) }
 
+		send()
+		if !tick(1300 * time.Millisecond) {
+			return
+		}
+		r.Step, r.StepNote = "review", "4 lenses"
 		send()
 		if !tick(2200 * time.Millisecond) {
 			return
@@ -141,7 +146,7 @@ func Demo(ctx context.Context) error {
 		for _, s := range []struct {
 			step, note string
 			d          time.Duration
-		}{{"push", "origin/worktree-sync-throttle", 1200 * time.Millisecond}, {"pr", "writing the body", 1800 * time.Millisecond}} {
+		}{{"pr", "pushing worktree-sync-throttle", 1000 * time.Millisecond}, {"pr", "writing the body", 1600 * time.Millisecond}} {
 			r.Step, r.StepNote = s.step, s.note
 			send()
 			if !tick(s.d) {
