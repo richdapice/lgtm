@@ -87,7 +87,11 @@ func main() {
 		err = cmdPush(ctx, args, logger)
 	case "demo":
 		if len(args) > 0 && args[0] == "bar" {
-			err = tui.DemoBar(ctx)
+			fs := flag.NewFlagSet("demo bar", flag.ExitOnError)
+			par := fs.Bool("parallel", false, "one bar per lens, filling at different rates")
+			passes := fs.Int("passes", 1, "review rows in sequence")
+			fs.Parse(args[1:])
+			err = tui.DemoBar(ctx, tui.DemoBarOptions{Parallel: *par, Passes: *passes})
 		} else {
 			err = tui.Demo(ctx)
 		}
@@ -158,6 +162,8 @@ SETUP
 SEE IT
   lgtm demo                    a scripted run in the real panel; no agent, no repo
   lgtm demo bar                the status bar through a scripted run
+    --parallel                 one bar per lens (dispatch = "parallel")
+    --passes N                 N review rows in sequence
   lgtm statusline              render the bar (Claude Code calls this; you don't)
 
 EXIT CODES
