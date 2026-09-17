@@ -47,7 +47,6 @@ type Lens struct {
 	Name      string    `json:"name"`
 	Model     string    `json:"model"`
 	State     LensState `json:"state"`
-	Frac      float64   `json:"frac"` // 0..1, best-effort progress
 	Found     int       `json:"found"`
 	StartedAt time.Time `json:"started_at,omitempty"`
 	EndedAt   time.Time `json:"ended_at,omitempty"`

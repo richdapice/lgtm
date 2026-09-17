@@ -22,7 +22,6 @@ import (
 const (
 	gutter = 5
 	barW   = 13
-	eighth = " ▏▎▍▌▋▊▉█"
 	spark  = "▁▂▃▄▅▆▇█"
 )
 
@@ -54,6 +53,11 @@ type Input struct {
 	Runs    []*run.Run
 	History []run.Summary
 	IdleRef string
+	// Repo is the repository's name, shown before the branch so five bars on
+	// "main" can be told apart; RepoKey is its git common dir, which is how
+	// history rows are matched to it.
+	Repo    string
+	RepoKey string
 	NoRepo  bool // cwd isn't a git repo: show the plan windows, nothing else
 	Now     time.Time
 	// Plan is subscription-window usage from Claude Code's statusline JSON,
@@ -126,49 +130,79 @@ func Render(in Input, st Style) string {
 	case 0:
 		return idle(in, st)
 	case 1:
-		return single(live[0], in.Now, st, in.Plan)
+		return single(live[0], in, st)
 	default:
-		return multi(live, in.Now, st)
+		return multi(live, in, st)
 	}
 }
 
+// where is "repo · branch" for the header, or just the branch when the repo
+// isn't known.
+func where(in Input, ref string, st Style) string {
+	if in.Repo == "" {
+		return ref
+	}
+	return st.c(bold, in.Repo) + st.c(dim, " · ") + ref
+}
+
 func idle(in Input, st Style) string {
-	today, held := 0, 0
+	today := 0
 	y, m, d := in.Now.Date()
-	for _, h := range in.History {
+	var last *run.Summary
+	for i := range in.History {
+		h := &in.History[i]
 		// history is stored in UTC; "today" is the viewer's day, so a run at
 		// 11pm Mountain must not slip into tomorrow
 		if hy, hm, hd := h.EndedAt.In(in.Now.Location()).Date(); hy == y && hm == m && hd == d {
 			today++
-			if h.Outcome == run.Held {
-				held++
-			}
+		}
+		if in.RepoKey != "" && h.Repo == in.RepoKey {
+			last = h
 		}
 	}
 	state := "idle"
 	if in.NoRepo {
 		state = "not a repo"
 	}
-	head := st.c(bold, "lgtm") + " ▸ " + in.IdleRef + "   " + st.c(dim, state) + "   " + st.c(dim, fmt.Sprintf("%d runs today", today))
-	if p := in.Plan.render(st, in.Now); p != "" {
-		head += "   " + p
+	head := st.c(bold, "lgtm") + " ▸ " + where(in, strings.TrimPrefix(in.IdleRef, "worktree-"), st) + "   " + st.c(dim, state)
+	rows := []string{row(st, "", fit(head, in.Plan.render(st, in.Now), st), "", "lgtm")}
+	if len(in.History) == 0 {
+		return rows[0]
 	}
-	rows := []string{row(st, "", head, "", "lgtm")}
-	if len(in.History) > 0 {
-		rows = append(rows, row(st, "", historyRow(in.History, held, st), "", ""))
+	// second row: what happened last in this repo, then the wider picture
+	label, left := "runs", ""
+	if last != nil {
+		label, left = "last", lastRun(*last, in.Now, st)+"      "
 	}
+	rows = append(rows, row(st, st.c(dim, label), left+sparkRow(in.History, today, st), "", label))
 	return strings.Join(rows, "\n")
 }
 
-func historyRow(h []run.Summary, held int, st Style) string {
+// lastRun is one run in a few words: how it ended, on what, with what, when.
+func lastRun(h run.Summary, now time.Time, st Style) string {
+	var mark, tail string
+	switch h.Outcome {
+	case run.Done:
+		mark = st.c(good, "✓")
+		tail = fmt.Sprintf("%d found · %d fixed", h.Found, h.Fixed)
+		if h.Found == 0 {
+			tail = "clean"
+		}
+	case run.Held:
+		mark, tail = st.c(warn, "→"), "needed you"
+	default:
+		mark, tail = st.c(bad, "✗"), "failed"
+	}
+	return mark + " " + st.c(accent, strings.TrimPrefix(h.Branch, "worktree-")) +
+		st.c(dim, " · "+tail+" · "+ago(now.Sub(h.EndedAt)))
+}
+
+// sparkRow is the last runs as a sparkline, today's count, and how many in a
+// row shipped without needing you.
+func sparkRow(h []run.Summary, today int, st Style) string {
 	lo, hi := h[0].Duration, h[0].Duration
 	for _, s := range h {
-		if s.Duration > hi {
-			hi = s.Duration
-		}
-		if s.Duration < lo {
-			lo = s.Duration
-		}
+		hi, lo = max(hi, s.Duration), min(lo, s.Duration)
 	}
 	var b strings.Builder
 	for _, s := range h {
@@ -179,28 +213,45 @@ func historyRow(h []run.Summary, held int, st Style) string {
 			lvl = int(float64(s.Duration-lo) / float64(hi-lo) * 7)
 		}
 		ch := string([]rune(spark)[lvl])
-		if s.Outcome == run.Held {
+		switch s.Outcome {
+		case run.Held:
 			ch = st.c(warn, ch)
-		} else if s.Outcome == run.Failed {
+		case run.Failed:
 			ch = st.c(bad, ch)
+		default:
+			ch = st.c(dim, ch)
 		}
 		b.WriteString(ch)
 	}
-	med := median(h)
-	out := st.c(dim, fmt.Sprintf("%d runs  ", len(h))) + b.String() +
-		st.c(dim, fmt.Sprintf("  median %s · %d held", dur(med), held))
-	// consecutive runs that shipped without needing you
+	out := b.String() + st.c(dim, fmt.Sprintf("  %d today", today))
 	streak := 0
 	for i := len(h) - 1; i >= 0 && h[i].Outcome == run.Done; i-- {
 		streak++
 	}
 	if streak >= 2 {
-		out += st.c(good, fmt.Sprintf(" · streak %d", streak))
+		out += st.c(dim, " · ") + st.c(good, fmt.Sprintf("streak %d", streak))
 	}
 	return out
 }
 
-func single(r *run.Run, now time.Time, st Style, plan *PlanUsage) string {
+// ago is a coarse "how long since": 41m ago, 2h ago, yesterday, 3d ago.
+func ago(d time.Duration) string {
+	switch {
+	case d < time.Minute:
+		return "just now"
+	case d < time.Hour:
+		return fmt.Sprintf("%dm ago", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%dh ago", int(d.Hours()))
+	case d < 48*time.Hour:
+		return "yesterday"
+	default:
+		return fmt.Sprintf("%dd ago", int(d.Hours())/24)
+	}
+}
+
+func single(r *run.Run, in Input, st Style) string {
+	now, plan := in.Now, in.Plan
 	var rows []string
 	mode := r.Mode
 	switch r.Phase {
@@ -221,12 +272,10 @@ func single(r *run.Run, now time.Time, st Style, plan *PlanUsage) string {
 	}
 	// everything left-anchored: on a wide terminal a flush-right column ends
 	// up under Claude Code's notification area and reads as a separate thing
-	head := st.c(bold, "lgtm") + " ▸ " + st.c(accent, r.Branch) + st.c(dim, " → "+r.Base) +
+	branch := strings.TrimPrefix(r.Branch, "worktree-")
+	head := st.c(bold, "lgtm") + " ▸ " + where(in, st.c(accent, branch), st) + st.c(dim, " → "+r.Base) +
 		"   " + mode + "   " + st.c(dim, dur(r.Elapsed(now))) + "   " + cost(r.CostUSD, st)
-	if p := plan.render(st, now); p != "" {
-		head += "   " + p
-	}
-	rows = append(rows, row(st, "", head, "", "lgtm"))
+	rows = append(rows, row(st, "", fit(head, plan.render(st, now), st), "", "lgtm"))
 
 	// lenses while reviewing; after that the gate track tells the story
 	showLenses := r.Phase == run.Discover
@@ -299,7 +348,7 @@ func lensRow(l run.Lens, now time.Time, stem string, st Style) string {
 		bar, color = st.c(dim, strings.Repeat("─", barW)), good
 		found = st.c(good, "✓") + fmt.Sprintf("%3d", l.Found)
 	case run.Running:
-		bar, color = fill(l.Frac, st, accent), accent
+		bar, color = sweep(l.Elapsed(now), st), accent
 		found = "   –"
 	case run.LensFailed:
 		bar, color = st.c(bad, strings.Repeat("▁", barW)), bad
@@ -341,12 +390,13 @@ func ciRow(r *run.Run, now time.Time, st Style) string {
 	return b.String()
 }
 
-func multi(runs []*run.Run, now time.Time, st Style) string {
+func multi(runs []*run.Run, in Input, st Style) string {
+	now := in.Now
 	var total float64
 	for _, r := range runs {
 		total += r.CostUSD
 	}
-	head := st.c(bold, "lgtm") + " ▸ " + fmt.Sprintf("%d runs", len(runs)) + "   " + cost(total, st)
+	head := st.c(bold, "lgtm") + " ▸ " + where(in, fmt.Sprintf("%d runs", len(runs)), st) + "   " + cost(total, st)
 	rows := []string{row(st, "", head, "", "lgtm")}
 	for _, r := range runs {
 		name := strings.TrimPrefix(r.Branch, "worktree-")
@@ -372,6 +422,19 @@ func multi(runs []*run.Run, now time.Time, st Style) string {
 	return strings.Join(rows, "\n")
 }
 
+// fit appends the plan windows to a header only if the row still fits the
+// terminal: a wrapped header breaks every row under it, and the windows are
+// the part you can most afford to lose.
+func fit(head, plan string, st Style) string {
+	if plan == "" {
+		return head
+	}
+	if width(head)+3+width(plan) <= st.Cols-gutter-1 {
+		return head + "   " + plan
+	}
+	return head
+}
+
 // row lays out `<label> <left> ... <right>` with right flush to Cols. labelPlain
 // is the label's visible text when label carries color codes.
 func row(st Style, label, left, right, labelPlain string) string {
@@ -390,22 +453,25 @@ func row(st Style, label, left, right, labelPlain string) string {
 	return line + strings.Repeat(" ", gap) + right
 }
 
-func fill(frac float64, st Style, color string) string {
-	if frac < 0 {
-		frac = 0
+// sweep is the running bar: a bright head with a fading tail crossing the bar
+// once every barW seconds, driven by elapsed time so it needs no state. A
+// fill would claim to know how far along the agent is; nobody does.
+func sweep(elapsed time.Duration, st Style) string {
+	pos := int(elapsed.Seconds()) % barW
+	var b strings.Builder
+	for i := 0; i < barW; i++ {
+		switch d := (pos - i + barW) % barW; d {
+		case 0:
+			b.WriteString(st.c(accent, "█"))
+		case 1:
+			b.WriteString(st.c(accent, "▓"))
+		case 2:
+			b.WriteString(st.c(accent, "▒"))
+		default:
+			b.WriteString(st.c(dim, "░"))
+		}
 	}
-	if frac > 1 {
-		frac = 1
-	}
-	total := frac * barW
-	full := int(total)
-	rem := int((total - float64(full)) * 8)
-	s := strings.Repeat("█", full)
-	if rem > 0 && full < barW {
-		s += string([]rune(eighth)[rem])
-	}
-	n := utf8.RuneCountInString(s)
-	return st.c(color, s) + st.c(dim, strings.Repeat("░", max(barW-n, 0)))
+	return b.String()
 }
 
 // width is the visible cell count: strips ANSI and OSC 8, counts runes.

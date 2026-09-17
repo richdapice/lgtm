@@ -265,7 +265,10 @@ func cmdStatusline(args []string) error {
 	}
 	runs, _ := run.All(common)
 	hist, _ := run.History(common, 20)
-	fmt.Println(render.Render(render.Input{Runs: runs, History: hist, IdleRef: gitx.BranchFast(dir), Now: time.Now(), Plan: plan}, style))
+	// the common dir is <repo>/.git even from a worktree, so every worktree of
+	// a repo shares one name
+	repo := filepath.Base(filepath.Dir(common))
+	fmt.Println(render.Render(render.Input{Runs: runs, History: hist, IdleRef: gitx.BranchFast(dir), Repo: repo, RepoKey: common, Now: time.Now(), Plan: plan}, style))
 	return nil
 }
 

@@ -947,10 +947,8 @@ func (c *Ceremony) setLens(name string, st run.LensState, found int) {
 		switch st {
 		case run.Running:
 			l.StartedAt = time.Now().UTC()
-			l.Frac = 0.5 // one call, no progress signal; half is the honest midpoint
 		case run.LensDone:
 			l.EndedAt = time.Now().UTC()
-			l.Frac = 1
 			l.Found = found
 		}
 	}
