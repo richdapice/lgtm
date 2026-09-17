@@ -63,7 +63,7 @@ func Detect(root string) (Detected, error) {
 		if strings.Count(rel, string(filepath.Separator)) >= 2 {
 			return filepath.SkipDir
 		}
-		if pr := detectDir(p, filepath.ToSlash(rel), table); pr.Kind != "" {
+		if pr := detectDir(p, filepath.ToSlash(rel), table); pr.Kind != "" && !pr.blank() {
 			nested = append(nested, pr)
 			return filepath.SkipDir
 		}

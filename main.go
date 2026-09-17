@@ -416,6 +416,9 @@ func cmdInit(ctx context.Context, args []string) error {
 	r, ok := setup.Prompt(os.Stdin, os.Stdout, d, *yes)
 	if !ok {
 		fmt.Printf("\nnothing written\n")
+		if *bar || *sk {
+			fmt.Println("the Claude Code wiring was skipped too; run init again to set it up")
+		}
 		return nil
 	}
 	if err := setup.Write(root, r); err != nil {

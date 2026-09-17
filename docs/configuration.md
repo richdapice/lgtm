@@ -131,7 +131,7 @@ schema = "prompt"
 [[agent]]                # Codex CLI
 name = "codex"
 command = ["codex", "exec", "--sandbox", "read-only", "--skip-git-repo-check", "-"]
-fix_command = ["codex", "exec", "--sandbox", "workspace-write", "--full-auto", "--skip-git-repo-check", "-"]
+fix_command = ["codex", "exec", "--sandbox", "workspace-write", "--skip-git-repo-check", "-"]
 schema = "prompt"
 ```
 
