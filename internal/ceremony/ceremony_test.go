@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/richdapice/lgtm/internal/gitx"
+	"github.com/richdapice/lgtm/internal/project"
 )
 
 func repo(t *testing.T) string {
@@ -80,5 +81,33 @@ func TestGatherConventionsSources(t *testing.T) {
 		if strings.Contains(got, no) {
 			t.Errorf("must not include %q in:\n%s", no, got)
 		}
+	}
+}
+
+func TestEnvironmentFailureIsAnchored(t *testing.T) {
+	fail := func(out string) []project.Result {
+		return []project.Result{{Check: project.Check{Project: ".", Kind: "test"}, OK: false, Output: out}}
+	}
+	for _, out := range []string{
+		"sh: 1: vitest: command not found",
+		"fork/exec /usr/bin/gotestsum: no such file or directory",
+		"Error: Cannot find module 'react'",
+		"ModuleNotFoundError: No module named 'pytest'",
+	} {
+		if environmentFailure(fail(out)) == "" {
+			t.Errorf("should be an environment failure: %q", out)
+		}
+	}
+	for _, out := range []string{
+		"--- FAIL: TestLoad\n    open testdata/fixture.json: no such file or directory",
+		"expected key: not found in map",
+		"assert 2 == 3",
+	} {
+		if got := environmentFailure(fail(out)); got != "" {
+			t.Errorf("ordinary failure flagged as environment (%q): %q", got, out)
+		}
+	}
+	if environmentFailure([]project.Result{{OK: true, Output: "command not found"}}) != "" {
+		t.Error("a passing check is never an environment failure")
 	}
 }

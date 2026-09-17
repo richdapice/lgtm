@@ -63,7 +63,7 @@ func Detect(root string) (Detected, error) {
 		if strings.Count(rel, string(filepath.Separator)) >= 2 {
 			return filepath.SkipDir
 		}
-		if pr := detectDir(p, filepath.ToSlash(rel), table); pr.Kind != "" && !pr.blank() {
+		if pr := detectDir(p, filepath.ToSlash(rel), table); pr.Kind != "" {
 			nested = append(nested, pr)
 			return filepath.SkipDir
 		}
@@ -113,12 +113,16 @@ func Prompt(in io.Reader, out io.Writer, d Detected, yes bool) (config.Repo, boo
 	fmt.Fprintln(out, "lint and test run on the changed files at every check. suite runs once, before the PR.")
 	fmt.Fprintln(out, "{files} expands to the changed paths. Empty means skipped, never a pass.")
 	if yes {
-		return r, true
+		return withoutBlankNested(r), true
 	}
 
 	rd := bufio.NewReader(in)
+	eof := false
 	readLine := func() string {
-		line, _ := rd.ReadString('\n')
+		line, err := rd.ReadString('\n')
+		if err != nil {
+			eof = true
+		}
 		return strings.TrimSpace(line)
 	}
 	confirm := func(q string, def bool) bool {
@@ -138,6 +142,9 @@ func Prompt(in io.Reader, out io.Writer, d Detected, yes bool) (config.Repo, boo
 	// a command whose program isn't on PATH is probably a typo; say so
 	askCmd := func(label, def string) string {
 		for {
+			if eof { // input ran out: keep the defaults rather than ask forever
+				return def
+			}
 			fmt.Fprintf(out, "    %-6s [%s]: ", label, orDash(def))
 			v := readLine()
 			switch v {
@@ -185,7 +192,22 @@ func Prompt(in io.Reader, out io.Writer, d Detected, yes bool) (config.Repo, boo
 			edit(i)
 		}
 	}
-	return r, true
+	return withoutBlankNested(r), true
+}
+
+// withoutBlankNested drops nested projects left with no commands: written as
+// is, they would route every file under them to a project that runs no
+// checks, and a fix round with no check to validate it is reverted. The root
+// stays even when blank, so the file says where to put commands.
+func withoutBlankNested(r config.Repo) config.Repo {
+	kept := r.Projects[:0]
+	for _, p := range r.Projects {
+		if p.Path == "." || p.Test != "" || p.Lint != "" || p.Suite != "" {
+			kept = append(kept, p)
+		}
+	}
+	r.Projects = kept
+	return r
 }
 
 // show prints one project block: path, what it was recognized as, the three

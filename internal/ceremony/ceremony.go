@@ -1090,7 +1090,7 @@ func environmentFailure(rs []project.Result) string {
 // phrase an ordinary test failure prints (a missing fixture says "no such
 // file or directory" too, so that one is anchored to fork/exec).
 var environmentSignals = []string{
-	"command not found", ": not found", // sh, bash, zsh
+	"command not found", // sh, bash, zsh
 	"is not recognized as an internal or external command", // cmd.exe
 	"fork/exec",                              // exec of a missing binary
 	"cannot find module", "module_not_found", // node
@@ -1100,9 +1100,9 @@ var environmentSignals = []string{
 	"could not find gem", "bundler: command not found", // ruby
 	"could not find or load main class", // jvm
 	"error: no such command",            // cargo
-	"unable to resolve dependency", "could not resolve dependencies",
+	"could not resolve dependencies",    // maven
 	"gradlew: not found", "mvn: not found",
-	"xcrun: error", "no simulator", // xcode
+	"xcrun: error", // xcode
 }
 
 func checksText(rs []project.Result) string {

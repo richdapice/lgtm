@@ -311,8 +311,14 @@ func (a Adapter) ProbeFix(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if b, err := os.ReadFile(filepath.Join(dir, name)); err != nil || !strings.Contains(strings.ToUpper(string(b)), "OK") {
+	b, err := os.ReadFile(filepath.Join(dir, name))
+	switch {
+	case errors.Is(err, os.ErrNotExist):
 		return fmt.Errorf("agent: %s answered but did not write %s; check its edit permissions", a.Name, name)
+	case err != nil:
+		return fmt.Errorf("agent: reading %s: %w", name, err)
+	case !strings.Contains(strings.ToUpper(string(b)), "OK"):
+		return fmt.Errorf("agent: %s wrote %s but not what was asked: %q", a.Name, name, firstLine(b))
 	}
 	return nil
 }

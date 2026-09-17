@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/richdapice/lgtm/internal/config"
 )
@@ -219,5 +220,45 @@ func TestHintsNotRepeated(t *testing.T) {
 	p := detect(t, root).Projects[0]
 	if n := strings.Count(strings.Join(p.Hints, "\n"), "swiftlint"); n != 1 {
 		t.Fatalf("hints repeated %d times: %v", n, p.Hints)
+	}
+}
+
+func TestPromptDeclineWritesNothing(t *testing.T) {
+	d := Detected{Projects: []Project{{Project: config.Project{Path: ".", Test: "go test ./..."}, Kind: "go"}}}
+	if _, ok := Prompt(strings.NewReader("n\n"), &strings.Builder{}, d, false); ok {
+		t.Fatal("n must decline")
+	}
+}
+
+func TestPromptStopsAtEOF(t *testing.T) {
+	// a blank project is walked; stdin ends immediately. Must not loop.
+	d := Detected{Projects: []Project{{Project: config.Project{Path: "."}, Kind: "xcode"}}}
+	done := make(chan config.Repo, 1)
+	go func() { r, _ := Prompt(strings.NewReader(""), &strings.Builder{}, d, false); done <- r }()
+	select {
+	case r := <-done:
+		if len(r.Projects) != 1 || r.Projects[0].Test != "" {
+			t.Fatalf("got %+v", r.Projects)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("prompt loops at EOF")
+	}
+}
+
+func TestBlankNestedProjectIsShownThenDropped(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "go.mod", "module x\n")
+	os.MkdirAll(filepath.Join(root, "ios", "App.xcodeproj"), 0o755)
+	d := detect(t, root)
+	if len(d.Projects) != 2 || d.Projects[0].Path != "ios" || len(d.Projects[0].Hints) == 0 {
+		t.Fatalf("ios must be shown with its hints: %+v", d.Projects)
+	}
+	var out strings.Builder
+	r, _ := Prompt(strings.NewReader("\n\n\n"), &out, d, false) // ios walked, left blank
+	if len(r.Projects) != 1 || r.Projects[0].Path != "." {
+		t.Fatalf("blank ios must not shadow the root: %+v", r.Projects)
+	}
+	if !strings.Contains(out.String(), "Xcode project") {
+		t.Fatalf("hints not shown:\n%s", out.String())
 	}
 }

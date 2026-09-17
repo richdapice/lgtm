@@ -84,7 +84,7 @@ The conventions lens reads whatever the repo keeps its rules in, without being t
 
 ```toml
 [lgtm]
-conventions = ["CONTRIBUTING.md", "docs/style/*.md"]   # globs, relative to the root
+conventions = ["CONTRIBUTING.md", "docs/style/*.md"]   # globs, relative to the root; * is one path segment, there is no **
 ```
 
 ### The pull request

@@ -3,6 +3,7 @@ package setup
 import (
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -43,7 +44,12 @@ func ecosystems() ([]Ecosystem, error) {
 		panic("setup: embedded ecosystems.toml: " + err.Error())
 	}
 	path := config.EcosystemsPath()
-	if b, err := os.ReadFile(path); err == nil {
+	b, err := os.ReadFile(path)
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+	case err != nil:
+		return nil, err
+	default:
 		if err := toml.Unmarshal(b, &user); err != nil {
 			return nil, fmt.Errorf("%s: %w", path, err)
 		}
