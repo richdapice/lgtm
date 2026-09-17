@@ -1010,24 +1010,25 @@ func (c *Ceremony) printHeld() {
 	c.println("  run `lgtm` to decide.")
 }
 
-// dirtyFiles is what the fixer touched: modified, added, and untracked paths
-// from porcelain status. The tree was clean before the fixer ran, so anything
-// here is the fixer's.
+// dirtyFiles is what the fixer touched: modified and deleted tracked paths
+// plus untracked ones. The tree was clean before the fixer ran, so anything
+// here is the fixer's. Two plain-path listings rather than porcelain status,
+// whose leading status column is easy to mis-slice.
 func dirtyFiles(ctx context.Context, root string) ([]string, error) {
-	out, err := gitx.Run(ctx, root, "status", "--porcelain", "--untracked-files=all")
-	if err != nil {
-		return nil, err
-	}
 	var files []string
-	for _, line := range strings.Split(out, "\n") {
-		if len(line) < 4 {
-			continue
+	for _, args := range [][]string{
+		{"diff", "--name-only", "HEAD"},
+		{"ls-files", "--others", "--exclude-standard"},
+	} {
+		out, err := gitx.Run(ctx, root, args...)
+		if err != nil {
+			return nil, err
 		}
-		p := strings.TrimSpace(line[3:])
-		if i := strings.Index(p, " -> "); i >= 0 {
-			p = p[i+4:]
+		for _, line := range strings.Split(out, "\n") {
+			if line = strings.TrimSpace(line); line != "" {
+				files = append(files, line)
+			}
 		}
-		files = append(files, p)
 	}
 	return files, nil
 }
@@ -1085,12 +1086,14 @@ func environmentFailure(rs []project.Result) string {
 
 // environmentSignals are what shells and toolchains print when a program or
 // dependency is missing, lowercased. Stack traces about the code under test
-// never say these; a missing environment always does.
+// never say these; a missing environment always does. Nothing here may be a
+// phrase an ordinary test failure prints (a missing fixture says "no such
+// file or directory" too, so that one is anchored to fork/exec).
 var environmentSignals = []string{
-	"command not found", // sh, bash, zsh
+	"command not found", ": not found", // sh, bash, zsh
 	"is not recognized as an internal or external command", // cmd.exe
-	"no such file or directory",                            // exec of a missing binary
-	"cannot find module", "module_not_found",               // node
+	"fork/exec",                              // exec of a missing binary
+	"cannot find module", "module_not_found", // node
 	"not found and will be installed",        // npx
 	"modulenotfounderror", "no module named", // python
 	"cannot find package", "no required module provides", // go
@@ -1185,7 +1188,13 @@ func gatherConventions(root string, changed []string, extra []string) string {
 		}
 	}
 	for _, g := range append(append([]string(nil), conventionRootGlobs...), extra...) {
-		m, _ := filepath.Glob(filepath.Join(root, g))
+		// a pattern out of .lgtm.toml must stay inside the checkout: it ends up
+		// in the prompt handed to the agent
+		pat := filepath.Join(root, g)
+		if rel, err := filepath.Rel(root, pat); err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			continue
+		}
+		m, _ := filepath.Glob(pat)
 		sort.Strings(m)
 		for _, p := range m {
 			add(p)

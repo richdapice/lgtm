@@ -2,6 +2,8 @@ package setup
 
 import (
 	_ "embed"
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,24 +21,34 @@ type Ecosystem struct {
 	Name     string   `toml:"name"`
 	Marker   string   `toml:"marker"` // glob, relative to the project dir
 	Contains []string `toml:"contains,omitempty"`
-	Test     string   `toml:"test,omitempty"`
-	Lint     string   `toml:"lint,omitempty"`
-	Suite    string   `toml:"suite,omitempty"`
-	Hint     []string `toml:"hint,omitempty"`
+	// Script narrows a package.json-style marker to one whose "scripts" map
+	// has each key, with the value containing the given text ("" = any).
+	Script map[string]string `toml:"script,omitempty"`
+	Test   string            `toml:"test,omitempty"`
+	Lint   string            `toml:"lint,omitempty"`
+	Suite  string            `toml:"suite,omitempty"`
+	Hint   []string          `toml:"hint,omitempty"`
 }
 
 type ecosystemFile struct {
 	Ecosystems []Ecosystem `toml:"ecosystem"`
 }
 
-// ecosystems is the user's table, if any, followed by the built-in one.
-func ecosystems() []Ecosystem {
+// ecosystems is the user's table, if any, followed by the built-in one. A
+// broken user file is an error, not an empty table: init would otherwise
+// look like it simply didn't recognize the override.
+func ecosystems() ([]Ecosystem, error) {
 	var user, builtin ecosystemFile
-	toml.Decode(builtinEcosystems, &builtin)
-	if b, err := os.ReadFile(config.EcosystemsPath()); err == nil {
-		toml.Unmarshal(b, &user)
+	if _, err := toml.Decode(builtinEcosystems, &builtin); err != nil {
+		panic("setup: embedded ecosystems.toml: " + err.Error())
 	}
-	return append(user.Ecosystems, builtin.Ecosystems...)
+	path := config.EcosystemsPath()
+	if b, err := os.ReadFile(path); err == nil {
+		if err := toml.Unmarshal(b, &user); err != nil {
+			return nil, fmt.Errorf("%s: %w", path, err)
+		}
+	}
+	return append(user.Ecosystems, builtin.Ecosystems...), nil
 }
 
 // match fills whatever the project still lacks from the ecosystems whose
@@ -46,8 +58,11 @@ func match(dir string, p *config.Project, table []Ecosystem) (kinds, hints []str
 	var base, used []string
 	seen := map[string]bool{}
 	for _, e := range table {
+		if seen[e.Name] { // same name, same advice: one is enough
+			continue
+		}
 		files, _ := filepath.Glob(filepath.Join(dir, e.Marker))
-		if len(files) == 0 || !containsAll(files[0], e.Contains) {
+		if len(files) == 0 || !containsAll(files[0], e.Contains) || !hasScripts(files[0], e.Script) {
 			continue
 		}
 		name := strings.TrimSuffix(filepath.Base(files[0]), filepath.Ext(files[0]))
@@ -67,8 +82,8 @@ func match(dir string, p *config.Project, table []Ecosystem) (kinds, hints []str
 		// An entry without a contains clause names the language itself (go,
 		// python, node) and is always worth showing; a narrower one (vitest,
 		// ruff) only when it supplied something.
-		general := len(e.Contains) == 0
-		if seen[e.Name] || !(contributed || general) {
+		general := len(e.Contains) == 0 && len(e.Script) == 0
+		if !(contributed || general) {
 			continue
 		}
 		seen[e.Name] = true
@@ -79,6 +94,31 @@ func match(dir string, p *config.Project, table []Ecosystem) (kinds, hints []str
 		}
 	}
 	return append(base, used...), hints
+}
+
+// hasScripts reads the marker as JSON and checks its "scripts" map: each key
+// must exist and its value contain the wanted text.
+func hasScripts(path string, want map[string]string) bool {
+	if len(want) == 0 {
+		return true
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	var pkg struct {
+		Scripts map[string]string `json:"scripts"`
+	}
+	if json.Unmarshal(b, &pkg) != nil {
+		return false
+	}
+	for k, sub := range want {
+		v, ok := pkg.Scripts[k]
+		if !ok || !strings.Contains(v, sub) {
+			return false
+		}
+	}
+	return true
 }
 
 func containsAll(path string, needles []string) bool {

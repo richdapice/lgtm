@@ -43,8 +43,11 @@ var skipDirs = map[string]bool{
 // proposes commands from what it finds: task runners first, then the
 // ecosystem table. Nested projects come first so the root acts as the
 // fallback in ProjectFor.
-func Detect(root string) Detected {
-	table := ecosystems()
+func Detect(root string) (Detected, error) {
+	table, err := ecosystems()
+	if err != nil {
+		return Detected{}, err
+	}
 	var nested []Project
 	filepath.WalkDir(root, func(p string, e os.DirEntry, err error) error {
 		if err != nil || !e.IsDir() {
@@ -67,7 +70,7 @@ func Detect(root string) Detected {
 		return nil
 	})
 	sort.Slice(nested, func(i, j int) bool { return nested[i].Path < nested[j].Path })
-	return Detected{Projects: append(nested, detectDir(root, ".", table))}
+	return Detected{Projects: append(nested, detectDir(root, ".", table))}, nil
 }
 
 func detectDir(dir, rel string, table []Ecosystem) Project {
@@ -88,8 +91,9 @@ func (p Project) blank() bool { return p.Test == "" && p.Lint == "" && p.Suite =
 // Prompt shows every project the same way, asks one question, and only walks
 // the fields of a project when you ask to edit or when it's blank. A command
 // that isn't on your PATH is questioned before it's written. Mode, rounds,
-// and dispatch keep their defaults; the file says how to change them.
-func Prompt(in io.Reader, out io.Writer, d Detected, yes bool) config.Repo {
+// and dispatch keep their defaults; the file says how to change them. The
+// second return is false when the answer was no: nothing should be written.
+func Prompt(in io.Reader, out io.Writer, d Detected, yes bool) (config.Repo, bool) {
 	// PR defaults are written out explicitly: an on_open key that is present
 	// but empty means "no reaction", so leaving the struct zero would turn
 	// reactions off for every repo init touched.
@@ -109,7 +113,7 @@ func Prompt(in io.Reader, out io.Writer, d Detected, yes bool) config.Repo {
 	fmt.Fprintln(out, "lint and test run on the changed files at every check. suite runs once, before the PR.")
 	fmt.Fprintln(out, "{files} expands to the changed paths. Empty means skipped, never a pass.")
 	if yes {
-		return r
+		return r, true
 	}
 
 	rd := bufio.NewReader(in)
@@ -173,7 +177,7 @@ func Prompt(in io.Reader, out io.Writer, d Detected, yes bool) config.Repo {
 		case "e", "edit":
 			all = true
 		case "n", "no":
-			all = true
+			return r, false
 		}
 	}
 	for i, p := range d.Projects {
@@ -181,7 +185,7 @@ func Prompt(in io.Reader, out io.Writer, d Detected, yes bool) config.Repo {
 			edit(i)
 		}
 	}
-	return r
+	return r, true
 }
 
 // show prints one project block: path, what it was recognized as, the three

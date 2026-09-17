@@ -409,8 +409,15 @@ func cmdInit(ctx context.Context, args []string) error {
 	if _, err := os.Stat(filepath.Join(root, config.RepoFile)); err == nil && !*yes {
 		return fmt.Errorf("%s already exists; edit it, or delete it and run init again", config.RepoFile)
 	}
-	d := setup.Detect(root)
-	r := setup.Prompt(os.Stdin, os.Stdout, d, *yes)
+	d, err := setup.Detect(root)
+	if err != nil {
+		return err
+	}
+	r, ok := setup.Prompt(os.Stdin, os.Stdout, d, *yes)
+	if !ok {
+		fmt.Printf("\nnothing written\n")
+		return nil
+	}
 	if err := setup.Write(root, r); err != nil {
 		return err
 	}

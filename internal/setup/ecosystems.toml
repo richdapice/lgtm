@@ -1,6 +1,8 @@
 # What `lgtm init` recognizes. One entry per marker file; entries are tried in
 # order and, for each of lint/test/suite, the first entry that sets it wins.
-# `contains` narrows an entry to marker files holding every listed string.
+# `contains` narrows an entry to marker files holding every listed string;
+# `script` narrows a package.json to one whose scripts map has each key with a
+# value containing the text ("" = any value).
 # `hint` lines are shown instead of guessing when the right command depends on
 # something we can't see (a scheme, a module); {name} is the marker's basename.
 #
@@ -12,49 +14,49 @@
 [[ecosystem]]
 name = "vitest"
 marker = "package.json"
-contains = ['"test":', "vitest"]
+script = { test = "vitest" }
 test = "npx vitest related {files} --run"
 
 [[ecosystem]]
 name = "jest"
 marker = "package.json"
-contains = ['"test":', "jest"]
+script = { test = "jest" }
 test = "npx jest --findRelatedTests {files}"
 
 [[ecosystem]]
 name = "npm test"
 marker = "package.json"
-contains = ['"test":']
+script = { test = "" }
 test = "npm test"
 
 [[ecosystem]]
 name = "typecheck · eslint"
 marker = "package.json"
-contains = ['"typecheck":', "eslint"]
+script = { typecheck = "", lint = "eslint" }
 lint = "npm run typecheck && npx eslint {files}"
 
 [[ecosystem]]
 name = "typecheck · lint"
 marker = "package.json"
-contains = ['"typecheck":', '"lint":']
+script = { typecheck = "", lint = "" }
 lint = "npm run typecheck && npm run lint"
 
 [[ecosystem]]
 name = "typecheck"
 marker = "package.json"
-contains = ['"typecheck":']
+script = { typecheck = "" }
 lint = "npm run typecheck"
 
 [[ecosystem]]
 name = "eslint"
 marker = "package.json"
-contains = ["eslint"]
+script = { lint = "eslint" }
 lint = "npx eslint {files}"
 
 [[ecosystem]]
 name = "npm lint"
 marker = "package.json"
-contains = ['"lint":']
+script = { lint = "" }
 lint = "npm run lint"
 
 [[ecosystem]]
