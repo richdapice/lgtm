@@ -234,7 +234,7 @@ func prepare(ctx context.Context, o Options) (*Ceremony, error) {
 	if c.intent == "" {
 		c.intent, _ = gitx.Run(ctx, c.root, "log", "--format=%s%n%b", c.mergeBase+"..HEAD")
 	}
-	c.conventions = gatherConventions(c.root, c.changed)
+	c.conventions = gatherConventions(c.root, c.changed, c.repo.Settings.Conventions)
 	if c.prompts, err = c.repo.LensPrompts(lens.Descriptions); err != nil {
 		return nil, err
 	}
@@ -1010,24 +1010,25 @@ func (c *Ceremony) printHeld() {
 	c.println("  run `lgtm` to decide.")
 }
 
-// dirtyFiles is what the fixer touched: modified, added, and untracked paths
-// from porcelain status. The tree was clean before the fixer ran, so anything
-// here is the fixer's.
+// dirtyFiles is what the fixer touched: modified and deleted tracked paths
+// plus untracked ones. The tree was clean before the fixer ran, so anything
+// here is the fixer's. Two plain-path listings rather than porcelain status,
+// whose leading status column is easy to mis-slice.
 func dirtyFiles(ctx context.Context, root string) ([]string, error) {
-	out, err := gitx.Run(ctx, root, "status", "--porcelain", "--untracked-files=all")
-	if err != nil {
-		return nil, err
-	}
 	var files []string
-	for _, line := range strings.Split(out, "\n") {
-		if len(line) < 4 {
-			continue
+	for _, args := range [][]string{
+		{"diff", "--name-only", "HEAD"},
+		{"ls-files", "--others", "--exclude-standard"},
+	} {
+		out, err := gitx.Run(ctx, root, args...)
+		if err != nil {
+			return nil, err
 		}
-		p := strings.TrimSpace(line[3:])
-		if i := strings.Index(p, " -> "); i >= 0 {
-			p = p[i+4:]
+		for _, line := range strings.Split(out, "\n") {
+			if line = strings.TrimSpace(line); line != "" {
+				files = append(files, line)
+			}
 		}
-		files = append(files, p)
 	}
 	return files, nil
 }
@@ -1066,19 +1067,42 @@ func firstLines(s string, n int) string {
 }
 
 // environmentFailure spots a check that failed because the tools aren't
-// there, not because the fix is wrong: worktrees often lack node_modules.
+// there, not because the fix is wrong: worktrees often lack node_modules, a
+// venv, or a compiled toolchain. Matched case-insensitively.
 func environmentFailure(rs []project.Result) string {
 	for _, r := range rs {
 		if r.Skipped || r.OK {
 			continue
 		}
-		for _, sig := range []string{"command not found", "Cannot find module", "MODULE_NOT_FOUND", "not found and will be installed"} {
-			if strings.Contains(r.Output, sig) {
+		out := strings.ToLower(r.Output)
+		for _, sig := range environmentSignals {
+			if strings.Contains(out, sig) {
 				return r.Project + " " + r.Kind + ": " + sig
 			}
 		}
 	}
 	return ""
+}
+
+// environmentSignals are what shells and toolchains print when a program or
+// dependency is missing, lowercased. Stack traces about the code under test
+// never say these; a missing environment always does. Nothing here may be a
+// phrase an ordinary test failure prints (a missing fixture says "no such
+// file or directory" too, so that one is anchored to fork/exec).
+var environmentSignals = []string{
+	"command not found", // sh, bash, zsh
+	"is not recognized as an internal or external command", // cmd.exe
+	"fork/exec",                              // exec of a missing binary
+	"cannot find module", "module_not_found", // node
+	"not found and will be installed",        // npx
+	"modulenotfounderror", "no module named", // python
+	"cannot find package", "no required module provides", // go
+	"could not find gem", "bundler: command not found", // ruby
+	"could not find or load main class", // jvm
+	"error: no such command",            // cargo
+	"could not resolve dependencies",    // maven
+	"gradlew: not found", "mvn: not found",
+	"xcrun: error", // xcode
 }
 
 func checksText(rs []project.Result) string {
@@ -1101,10 +1125,20 @@ func checksText(rs []project.Result) string {
 }
 
 // gatherConventions collects the instruction files that apply to the changed
-// paths: the user's global CLAUDE.md, then CLAUDE.md/AGENTS.md at the repo
-// root and in every directory above a changed file. A one-line "@FILE" include
-// is followed, since that is how per-project files point at AGENTS.md.
-func gatherConventions(root string, changed []string) string {
+// paths: the user's global ones (Claude, Codex, Gemini), then, at the repo
+// root and in every directory above a changed file, whatever the repo keeps
+// its rules in: CLAUDE.md, AGENTS.md, GEMINI.md, .cursorrules, .windsurfrules,
+// .clinerules, CONVENTIONS.md, plus the root-only Copilot and Cursor rule
+// files, plus anything listed under conventions in .lgtm.toml. A one-line
+// "@FILE" include is followed, since that is how per-project files point at
+// AGENTS.md.
+var (
+	conventionHomeFiles = []string{".claude/CLAUDE.md", ".codex/AGENTS.md", ".gemini/GEMINI.md"}
+	conventionFiles     = []string{"CLAUDE.md", ".claude/CLAUDE.md", "AGENTS.md", "GEMINI.md", ".cursorrules", ".windsurfrules", ".clinerules", "CONVENTIONS.md"}
+	conventionRootGlobs = []string{".github/copilot-instructions.md", ".cursor/rules/*.mdc"}
+)
+
+func gatherConventions(root string, changed []string, extra []string) string {
 	const cap = 24 * 1024
 	seen := map[string]bool{}
 	var parts []string
@@ -1133,7 +1167,9 @@ func gatherConventions(root string, changed []string) string {
 		}
 	}
 	if home, err := os.UserHomeDir(); err == nil {
-		add(filepath.Join(home, ".claude", "CLAUDE.md"))
+		for _, p := range conventionHomeFiles {
+			add(filepath.Join(home, p))
+		}
 	}
 	dirs := map[string]bool{".": true}
 	for _, f := range changed {
@@ -1147,8 +1183,22 @@ func gatherConventions(root string, changed []string) string {
 	}
 	sort.Strings(ordered)
 	for _, d := range ordered {
-		add(filepath.Join(root, d, "CLAUDE.md"))
-		add(filepath.Join(root, d, "AGENTS.md"))
+		for _, name := range conventionFiles {
+			add(filepath.Join(root, d, name))
+		}
+	}
+	for _, g := range append(append([]string(nil), conventionRootGlobs...), extra...) {
+		// a pattern out of .lgtm.toml must stay inside the checkout: it ends up
+		// in the prompt handed to the agent
+		pat := filepath.Join(root, g)
+		if rel, err := filepath.Rel(root, pat); err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			continue
+		}
+		m, _ := filepath.Glob(pat)
+		sort.Strings(m)
+		for _, p := range m {
+			add(p)
+		}
 	}
 	out := strings.Join(parts, "\n\n")
 	if len(out) > cap {

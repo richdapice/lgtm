@@ -64,8 +64,12 @@ type Settings struct {
 	// config, anything your tests don't care about. A diff made only of these
 	// skips check and recheck. ** matches across directories.
 	Ignore []string `toml:"ignore,omitempty"`
-	Agent  string   `toml:"agent,omitempty"` // overrides Global.DefaultAgent
-	Base   string   `toml:"base,omitempty"`  // PR base; empty = detect default branch
+	// Conventions lists extra files (globs, relative to the root) the
+	// conventions lens should read, on top of the instruction files it finds
+	// on its own (CLAUDE.md, AGENTS.md, .cursorrules, and the like).
+	Conventions []string `toml:"conventions,omitempty"`
+	Agent       string   `toml:"agent,omitempty"` // overrides Global.DefaultAgent
+	Base        string   `toml:"base,omitempty"`  // PR base; empty = detect default branch
 	// MaxBudgetUSD caps each agent call. A reviewer with Read/Grep can explore
 	// well beyond the diff, which is where quality comes from and where cost
 	// goes; this is the knob. 0 = uncapped.
@@ -135,6 +139,12 @@ func GlobalPath() string {
 		return "config.toml"
 	}
 	return filepath.Join(home, ".config", "lgtm", "config.toml")
+}
+
+// EcosystemsPath is the user's addition to what `lgtm init` recognizes,
+// next to the global config.
+func EcosystemsPath() string {
+	return filepath.Join(filepath.Dir(GlobalPath()), "ecosystems.toml")
 }
 
 // LoadGlobal reads the user config. A missing file yields the built-in default:

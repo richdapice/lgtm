@@ -14,7 +14,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -285,6 +287,38 @@ func (a Adapter) Probe(ctx context.Context) error {
 	}
 	if !strings.Contains(strings.ToUpper(s), "OK") {
 		return fmt.Errorf("agent: %s answered %q, expected OK", a.Name, firstLine([]byte(s)))
+	}
+	return nil
+}
+
+// ProbeFix proves the fix posture can edit: in a scratch directory, ask the
+// agent to create one file, then check it did. Nothing in the repo is touched.
+func (a Adapter) ProbeFix(ctx context.Context) error {
+	if len(a.Command) == 0 {
+		return errors.New("agent: fix_command not configured")
+	}
+	if _, err := exec.LookPath(a.Command[0]); err != nil {
+		return fmt.Errorf("agent: %s not found on PATH", a.Command[0])
+	}
+	dir, err := os.MkdirTemp("", "lgtm-probe-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(dir)
+	a.Dir = dir
+	const name = "lgtm-probe.txt"
+	_, err = a.Ask(ctx, "Create a file named "+name+" in the current directory containing the single word OK. Do not run any commands. Then reply with exactly OK.", nil)
+	if err != nil {
+		return err
+	}
+	b, err := os.ReadFile(filepath.Join(dir, name))
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		return fmt.Errorf("agent: %s answered but did not write %s; check its edit permissions", a.Name, name)
+	case err != nil:
+		return fmt.Errorf("agent: reading %s: %w", name, err)
+	case !strings.Contains(strings.ToUpper(string(b)), "OK"):
+		return fmt.Errorf("agent: %s wrote %s but not what was asked: %q", a.Name, name, firstLine(b))
 	}
 	return nil
 }

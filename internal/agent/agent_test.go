@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -130,5 +131,32 @@ func TestArgvPerTier(t *testing.T) {
 func TestExtractJSONTruncatedIsRejected(t *testing.T) {
 	if _, ok := ExtractJSON([]byte(`{"findings":[{"file":"a.ts"`)); ok {
 		t.Fatal("truncated JSON accepted")
+	}
+}
+
+// fakeEditor is a CLI that writes (or refuses to write) the probe file in its
+// working directory, so the doctor's fix probe is pinned without a real agent.
+func fakeEditor(t *testing.T, writes bool) []string {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "fake-editor")
+	body := "#!/bin/sh\ncat >/dev/null\n"
+	if writes {
+		body += "printf OK > lgtm-probe.txt\n"
+	}
+	body += "printf OK\n"
+	if err := os.WriteFile(p, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return []string{p}
+}
+
+func TestProbeFixChecksTheFileNotTheReply(t *testing.T) {
+	ok := Adapter{Name: "fake", Command: fakeEditor(t, true), Cap: SchemaInPrompt}
+	if err := ok.ProbeFix(context.Background()); err != nil {
+		t.Fatalf("editor that writes: %v", err)
+	}
+	talker := Adapter{Name: "fake", Command: fakeEditor(t, false), Cap: SchemaInPrompt}
+	if err := talker.ProbeFix(context.Background()); err == nil || !strings.Contains(err.Error(), "did not write") {
+		t.Fatalf("editor that only says OK must fail: %v", err)
 	}
 }
