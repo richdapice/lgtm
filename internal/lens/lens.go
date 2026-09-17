@@ -57,7 +57,7 @@ type Input struct {
 	Lenses      []string
 	Prompts     map[string]string // per lens; Descriptions when nil
 	Diff        string
-	Conventions string // CLAUDE.md / AGENTS.md text, may be empty
+	Conventions string // the repo's instruction files (CLAUDE.md, AGENTS.md, .cursorrules, ...), may be empty
 	Intent      string // optional: what the author says the change is for
 }
 

@@ -9,21 +9,27 @@ import (
 	"github.com/richdapice/lgtm/internal/config"
 )
 
+func write(t *testing.T, root, rel, body string) {
+	t.Helper()
+	p := filepath.Join(root, rel)
+	os.MkdirAll(filepath.Dir(p), 0o755)
+	if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestDetectMonorepo(t *testing.T) {
 	root := t.TempDir()
-	os.WriteFile(filepath.Join(root, "package.json"), []byte(`{"scripts":{"test":"vitest run","lint":"eslint . --ext .ts","typecheck":"tsc --noEmit"}}`), 0o644)
-	os.MkdirAll(filepath.Join(root, "website"), 0o755)
-	os.WriteFile(filepath.Join(root, "website", "package.json"), []byte(`{"scripts":{"test":"jest"}}`), 0o644)
-	os.MkdirAll(filepath.Join(root, "server"), 0o755)
-	os.WriteFile(filepath.Join(root, "server", "go.mod"), []byte("module x\n"), 0o644)
-	os.MkdirAll(filepath.Join(root, "node_modules", "dep"), 0o755)
-	os.WriteFile(filepath.Join(root, "node_modules", "dep", "package.json"), []byte(`{}`), 0o644)
+	write(t, root, "package.json", `{"scripts":{"test":"vitest run","lint":"eslint . --ext .ts","typecheck":"tsc --noEmit"}}`)
+	write(t, root, "website/package.json", `{"scripts":{"test":"jest"}}`)
+	write(t, root, "server/go.mod", "module x\n")
+	write(t, root, "node_modules/dep/package.json", `{}`)
 
 	d := Detect(root)
 	if len(d.Projects) != 3 {
 		t.Fatalf("projects = %+v", d.Projects)
 	}
-	if d.Projects[0].Path != "server" || d.Projects[0].Test != "go test ./..." {
+	if d.Projects[0].Path != "server" || d.Projects[0].Test != "go test ./..." || d.Projects[0].Kind != "go" {
 		t.Fatalf("server = %+v", d.Projects[0])
 	}
 	if d.Projects[1].Path != "website" || d.Projects[1].Test != "npx jest --findRelatedTests {files}" || d.Projects[1].Lint != "" {
@@ -33,18 +39,100 @@ func TestDetectMonorepo(t *testing.T) {
 	if r.Path != "." || r.Test != "npx vitest related {files} --run" || r.Lint != "npm run typecheck && npx eslint {files}" {
 		t.Fatalf("root = %+v", r)
 	}
+	if r.Kind != "node · vitest · typecheck · eslint" {
+		t.Fatalf("kind = %q", r.Kind)
+	}
+}
+
+func TestRunnersComeFirst(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "go.mod", "module x\n")
+	write(t, root, "Makefile", "CC := gcc\n\n.PHONY: test lint\ntest: build\n\tgo test ./...\nlint:\n\tgolangci-lint run\ntest-all:\n\tgo test -tags integration ./...\n")
+	d := Detect(root)
+	p := d.Projects[0]
+	if p.Test != "make test" || p.Lint != "make lint" || p.Suite != "make test-all" {
+		t.Fatalf("got %+v", p.Project)
+	}
+	if p.Kind != "Makefile · go" {
+		t.Fatalf("kind = %q", p.Kind)
+	}
+}
+
+func TestJustAndTaskfile(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "justfile", "set shell := [\"bash\", \"-c\"]\n\n# run tests\ntest *ARGS:\n    cargo test {{ARGS}}\n\ncheck:\n    cargo clippy\n")
+	write(t, root, "Cargo.toml", "[package]\nname = \"x\"\n")
+	p := Detect(root).Projects[0]
+	if p.Test != "just test" || p.Lint != "just check" {
+		t.Fatalf("just: %+v", p.Project)
+	}
+
+	root = t.TempDir()
+	write(t, root, "Taskfile.yml", "version: '3'\n\nvars:\n  X: 1\n\ntasks:\n  build:\n    cmds: [go build]\n  test:\n    cmds: [go test ./...]\n  lint:\n    cmds: [golangci-lint run]\n")
+	p = Detect(root).Projects[0]
+	if p.Test != "task test" || p.Lint != "task lint" {
+		t.Fatalf("task: %+v", p.Project)
+	}
+}
+
+func TestMoreEcosystems(t *testing.T) {
+	cases := []struct {
+		files      map[string]string
+		test, lint string
+	}{
+		{map[string]string{"mix.exs": ""}, "mix test", "mix format --check-formatted {files}"},
+		{map[string]string{"Gemfile": "gem 'rspec'\ngem 'rubocop'"}, "bundle exec rspec", "bundle exec rubocop {files}"},
+		{map[string]string{"pyproject.toml": "[tool.ruff]\n"}, "pytest", "ruff check {files}"},
+		{map[string]string{"App.csproj": ""}, "dotnet test", "dotnet format --verify-no-changes"},
+		{map[string]string{"pubspec.yaml": "dependencies:\n  flutter:\n"}, "flutter test", "flutter analyze"},
+		{map[string]string{"composer.json": `{"require-dev":{"phpunit/phpunit":"^10","phpstan/phpstan":"^1"}}`}, "vendor/bin/phpunit", "vendor/bin/phpstan analyse {files}"},
+	}
+	for _, c := range cases {
+		root := t.TempDir()
+		for f, b := range c.files {
+			write(t, root, f, b)
+		}
+		p := Detect(root).Projects[0]
+		if p.Test != c.test || p.Lint != c.lint {
+			t.Errorf("%v: got test=%q lint=%q", c.files, p.Test, p.Lint)
+		}
+	}
+}
+
+func TestUserEcosystemsWin(t *testing.T) {
+	cfg := t.TempDir()
+	t.Setenv("LGTM_CONFIG", filepath.Join(cfg, "config.toml"))
+	write(t, cfg, "ecosystems.toml", "[[ecosystem]]\nname = \"mine\"\nmarker = \"go.mod\"\ntest = \"gotestsum ./...\"\n")
+	root := t.TempDir()
+	write(t, root, "go.mod", "module x\n")
+	p := Detect(root).Projects[0]
+	if p.Test != "gotestsum ./..." || p.Lint != "go vet ./..." || p.Kind != "mine · go" {
+		t.Fatalf("got %+v kind=%q", p.Project, p.Kind)
+	}
+}
+
+func TestHintsRecognizeXcode(t *testing.T) {
+	root := t.TempDir()
+	os.MkdirAll(filepath.Join(root, "App.xcodeproj"), 0o755)
+	p := Detect(root).Projects[0]
+	if p.Kind != "xcode" || len(p.Hints) == 0 || !strings.Contains(strings.Join(p.Hints, "\n"), "-scheme App ") {
+		t.Fatalf("got kind=%q hints=%v", p.Kind, p.Hints)
+	}
+	if !p.blank() {
+		t.Fatalf("xcode should not guess commands: %+v", p.Project)
+	}
 }
 
 func TestPromptDetectedIsOneQuestion(t *testing.T) {
 	root := t.TempDir()
-	d := Detected{Projects: []config.Project{{Path: ".", Test: "go test ./...", Lint: "go vet ./..."}}}
+	d := Detected{Projects: []Project{{Project: config.Project{Path: ".", Test: "go test ./...", Lint: "go vet ./..."}, Kind: "go"}}}
 	var out strings.Builder
-	r := Prompt(strings.NewReader("\n"), &out, d, false) // Enter = keep
+	r := Prompt(strings.NewReader("\n"), &out, d, false) // Enter = write
 	if r.Projects[0].Test != "go test ./..." || r.Settings.Mode != "auto" || r.Settings.MaxFixRounds != 3 {
 		t.Fatalf("kept = %+v", r)
 	}
-	if strings.Contains(out.String(), "mode (") {
-		t.Fatal("asked about mode; defaults should not be questions")
+	if strings.Count(out.String(), "Write this?") != 1 || strings.Contains(out.String(), "Enter keeps") {
+		t.Fatalf("expected exactly one question:\n%s", out.String())
 	}
 	if err := Write(root, r); err != nil {
 		t.Fatal(err)
@@ -53,33 +141,43 @@ func TestPromptDetectedIsOneQuestion(t *testing.T) {
 	if back.Projects[0].Test != "go test ./..." {
 		t.Fatalf("round trip = %+v", back)
 	}
+	if back.PR.OnOpen != "eyes" || back.PR.OnGreen != "+1" {
+		t.Fatalf("init must not silence PR reactions: %+v", back.PR)
+	}
+}
+
+func TestPromptEditWalksEveryField(t *testing.T) {
+	d := Detected{Projects: []Project{{Project: config.Project{Path: ".", Test: "go test ./...", Lint: "go vet ./..."}, Kind: "go"}}}
+	var out strings.Builder
+	// e -> lint: keep; test: clear; suite: "true"
+	r := Prompt(strings.NewReader("e\n\n-\ntrue\n"), &out, d, false)
+	p := r.Projects[0]
+	if p.Lint != "go vet ./..." || p.Test != "" || p.Suite != "true" {
+		t.Fatalf("got %+v", p)
+	}
 }
 
 func TestPromptBlankProjectValidatesCommands(t *testing.T) {
-	d := Detected{Projects: []config.Project{{Path: "."}}, Hints: []string{"Xcode project. Likely commands:"}}
+	d := Detected{Projects: []Project{{Project: config.Project{Path: "."}, Kind: "xcode", Hints: []string{"Xcode project. The usual shape:"}}}}
 	var out strings.Builder
-	// lint: "iij" (not on PATH) -> use anyway? n -> then "true" (on PATH); test: empty; suite: empty
+	// blank project goes straight to edit: lint "iij" (not on PATH) -> use anyway? n -> "true"; test empty; suite empty
 	r := Prompt(strings.NewReader("iij\nn\ntrue\n\n\n"), &out, d, false)
 	if r.Projects[0].Lint != "true" || r.Projects[0].Test != "" {
 		t.Fatalf("got %+v", r.Projects[0])
 	}
-	if !strings.Contains(out.String(), "Xcode project") || !strings.Contains(out.String(), `"iij" isn't on your PATH`) {
-		t.Fatalf("prompt output:\n%s", out.String())
-	}
-}
-
-func TestHintsRecognizeXcode(t *testing.T) {
-	root := t.TempDir()
-	os.MkdirAll(filepath.Join(root, "App.xcodeproj"), 0o755)
-	d := Detect(root)
-	if len(d.Hints) == 0 || !strings.Contains(d.Hints[0], "Xcode") {
-		t.Fatalf("hints = %v", d.Hints)
+	s := out.String()
+	if !strings.Contains(s, "Xcode project") || !strings.Contains(s, `"iij" isn't on your PATH`) || strings.Contains(s, "Write this?") {
+		t.Fatalf("prompt output:\n%s", s)
 	}
 }
 
 func TestPromptYesSkipsQuestions(t *testing.T) {
-	r := Prompt(strings.NewReader(""), &strings.Builder{}, Detected{Projects: []config.Project{{Path: "."}}}, true)
+	var out strings.Builder
+	r := Prompt(strings.NewReader(""), &out, Detected{Projects: []Project{{Project: config.Project{Path: "."}}}}, true)
 	if r.Settings.Mode != "auto" || r.Settings.MaxFixRounds != 3 {
 		t.Fatalf("defaults = %+v", r.Settings)
+	}
+	if strings.Contains(out.String(), "]: ") {
+		t.Fatalf("asked a question under -y:\n%s", out.String())
 	}
 }

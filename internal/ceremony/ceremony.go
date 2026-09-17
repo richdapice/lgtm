@@ -234,7 +234,7 @@ func prepare(ctx context.Context, o Options) (*Ceremony, error) {
 	if c.intent == "" {
 		c.intent, _ = gitx.Run(ctx, c.root, "log", "--format=%s%n%b", c.mergeBase+"..HEAD")
 	}
-	c.conventions = gatherConventions(c.root, c.changed)
+	c.conventions = gatherConventions(c.root, c.changed, c.repo.Settings.Conventions)
 	if c.prompts, err = c.repo.LensPrompts(lens.Descriptions); err != nil {
 		return nil, err
 	}
@@ -1066,19 +1066,40 @@ func firstLines(s string, n int) string {
 }
 
 // environmentFailure spots a check that failed because the tools aren't
-// there, not because the fix is wrong: worktrees often lack node_modules.
+// there, not because the fix is wrong: worktrees often lack node_modules, a
+// venv, or a compiled toolchain. Matched case-insensitively.
 func environmentFailure(rs []project.Result) string {
 	for _, r := range rs {
 		if r.Skipped || r.OK {
 			continue
 		}
-		for _, sig := range []string{"command not found", "Cannot find module", "MODULE_NOT_FOUND", "not found and will be installed"} {
-			if strings.Contains(r.Output, sig) {
+		out := strings.ToLower(r.Output)
+		for _, sig := range environmentSignals {
+			if strings.Contains(out, sig) {
 				return r.Project + " " + r.Kind + ": " + sig
 			}
 		}
 	}
 	return ""
+}
+
+// environmentSignals are what shells and toolchains print when a program or
+// dependency is missing, lowercased. Stack traces about the code under test
+// never say these; a missing environment always does.
+var environmentSignals = []string{
+	"command not found", // sh, bash, zsh
+	"is not recognized as an internal or external command", // cmd.exe
+	"no such file or directory",                            // exec of a missing binary
+	"cannot find module", "module_not_found",               // node
+	"not found and will be installed",        // npx
+	"modulenotfounderror", "no module named", // python
+	"cannot find package", "no required module provides", // go
+	"could not find gem", "bundler: command not found", // ruby
+	"could not find or load main class", // jvm
+	"error: no such command",            // cargo
+	"unable to resolve dependency", "could not resolve dependencies",
+	"gradlew: not found", "mvn: not found",
+	"xcrun: error", "no simulator", // xcode
 }
 
 func checksText(rs []project.Result) string {
@@ -1101,10 +1122,20 @@ func checksText(rs []project.Result) string {
 }
 
 // gatherConventions collects the instruction files that apply to the changed
-// paths: the user's global CLAUDE.md, then CLAUDE.md/AGENTS.md at the repo
-// root and in every directory above a changed file. A one-line "@FILE" include
-// is followed, since that is how per-project files point at AGENTS.md.
-func gatherConventions(root string, changed []string) string {
+// paths: the user's global ones (Claude, Codex, Gemini), then, at the repo
+// root and in every directory above a changed file, whatever the repo keeps
+// its rules in: CLAUDE.md, AGENTS.md, GEMINI.md, .cursorrules, .windsurfrules,
+// .clinerules, CONVENTIONS.md, plus the root-only Copilot and Cursor rule
+// files, plus anything listed under conventions in .lgtm.toml. A one-line
+// "@FILE" include is followed, since that is how per-project files point at
+// AGENTS.md.
+var (
+	conventionHomeFiles = []string{".claude/CLAUDE.md", ".codex/AGENTS.md", ".gemini/GEMINI.md"}
+	conventionFiles     = []string{"CLAUDE.md", ".claude/CLAUDE.md", "AGENTS.md", "GEMINI.md", ".cursorrules", ".windsurfrules", ".clinerules", "CONVENTIONS.md"}
+	conventionRootGlobs = []string{".github/copilot-instructions.md", ".cursor/rules/*.mdc"}
+)
+
+func gatherConventions(root string, changed []string, extra []string) string {
 	const cap = 24 * 1024
 	seen := map[string]bool{}
 	var parts []string
@@ -1133,7 +1164,9 @@ func gatherConventions(root string, changed []string) string {
 		}
 	}
 	if home, err := os.UserHomeDir(); err == nil {
-		add(filepath.Join(home, ".claude", "CLAUDE.md"))
+		for _, p := range conventionHomeFiles {
+			add(filepath.Join(home, p))
+		}
 	}
 	dirs := map[string]bool{".": true}
 	for _, f := range changed {
@@ -1147,8 +1180,16 @@ func gatherConventions(root string, changed []string) string {
 	}
 	sort.Strings(ordered)
 	for _, d := range ordered {
-		add(filepath.Join(root, d, "CLAUDE.md"))
-		add(filepath.Join(root, d, "AGENTS.md"))
+		for _, name := range conventionFiles {
+			add(filepath.Join(root, d, name))
+		}
+	}
+	for _, g := range append(append([]string(nil), conventionRootGlobs...), extra...) {
+		m, _ := filepath.Glob(filepath.Join(root, g))
+		sort.Strings(m)
+		for _, p := range m {
+			add(p)
+		}
 	}
 	out := strings.Join(parts, "\n\n")
 	if len(out) > cap {

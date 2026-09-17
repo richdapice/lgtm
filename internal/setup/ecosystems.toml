@@ -1,0 +1,250 @@
+# What `lgtm init` recognizes. One entry per marker file; entries are tried in
+# order and, for each of lint/test/suite, the first entry that sets it wins.
+# `contains` narrows an entry to marker files holding every listed string.
+# `hint` lines are shown instead of guessing when the right command depends on
+# something we can't see (a scheme, a module); {name} is the marker's basename.
+#
+# Add your own at ~/.config/lgtm/ecosystems.toml (same shape); those are tried
+# first. Task runners (Makefile, justfile, Taskfile) are read before any of this.
+
+# ---- JavaScript / TypeScript ----------------------------------------------
+
+[[ecosystem]]
+name = "vitest"
+marker = "package.json"
+contains = ['"test":', "vitest"]
+test = "npx vitest related {files} --run"
+
+[[ecosystem]]
+name = "jest"
+marker = "package.json"
+contains = ['"test":', "jest"]
+test = "npx jest --findRelatedTests {files}"
+
+[[ecosystem]]
+name = "npm test"
+marker = "package.json"
+contains = ['"test":']
+test = "npm test"
+
+[[ecosystem]]
+name = "typecheck · eslint"
+marker = "package.json"
+contains = ['"typecheck":', "eslint"]
+lint = "npm run typecheck && npx eslint {files}"
+
+[[ecosystem]]
+name = "typecheck · lint"
+marker = "package.json"
+contains = ['"typecheck":', '"lint":']
+lint = "npm run typecheck && npm run lint"
+
+[[ecosystem]]
+name = "typecheck"
+marker = "package.json"
+contains = ['"typecheck":']
+lint = "npm run typecheck"
+
+[[ecosystem]]
+name = "eslint"
+marker = "package.json"
+contains = ["eslint"]
+lint = "npx eslint {files}"
+
+[[ecosystem]]
+name = "npm lint"
+marker = "package.json"
+contains = ['"lint":']
+lint = "npm run lint"
+
+[[ecosystem]]
+name = "node"
+marker = "package.json"
+
+[[ecosystem]]
+name = "deno"
+marker = "deno.json"
+test = "deno test"
+lint = "deno lint {files}"
+
+# ---- Go / Rust / Zig -------------------------------------------------------
+
+[[ecosystem]]
+name = "go"
+marker = "go.mod"
+test = "go test ./..."
+lint = "go vet ./..."
+
+[[ecosystem]]
+name = "cargo"
+marker = "Cargo.toml"
+test = "cargo test"
+lint = "cargo clippy -- -D warnings"
+
+[[ecosystem]]
+name = "zig"
+marker = "build.zig"
+test = "zig build test"
+
+# ---- Python ----------------------------------------------------------------
+
+[[ecosystem]]
+name = "ruff"
+marker = "pyproject.toml"
+contains = ["ruff"]
+lint = "ruff check {files}"
+
+[[ecosystem]]
+name = "python"
+marker = "pyproject.toml"
+test = "pytest"
+
+[[ecosystem]]
+name = "python"
+marker = "setup.py"
+test = "pytest"
+
+[[ecosystem]]
+name = "python"
+marker = "requirements.txt"
+test = "pytest"
+
+# ---- Ruby / Elixir / PHP ---------------------------------------------------
+
+[[ecosystem]]
+name = "rspec"
+marker = "Gemfile"
+contains = ["rspec"]
+test = "bundle exec rspec"
+
+[[ecosystem]]
+name = "rubocop"
+marker = "Gemfile"
+contains = ["rubocop"]
+lint = "bundle exec rubocop {files}"
+
+[[ecosystem]]
+name = "ruby"
+marker = "Gemfile"
+test = "bundle exec rake test"
+
+[[ecosystem]]
+name = "mix"
+marker = "mix.exs"
+test = "mix test"
+lint = "mix format --check-formatted {files}"
+
+[[ecosystem]]
+name = "phpunit"
+marker = "composer.json"
+contains = ["phpunit"]
+test = "vendor/bin/phpunit"
+
+[[ecosystem]]
+name = "phpstan"
+marker = "composer.json"
+contains = ["phpstan"]
+lint = "vendor/bin/phpstan analyse {files}"
+
+[[ecosystem]]
+name = "php"
+marker = "composer.json"
+
+# ---- .NET / JVM ------------------------------------------------------------
+
+[[ecosystem]]
+name = "dotnet"
+marker = "*.sln"
+test = "dotnet test"
+lint = "dotnet format --verify-no-changes"
+
+[[ecosystem]]
+name = "dotnet"
+marker = "*.csproj"
+test = "dotnet test"
+lint = "dotnet format --verify-no-changes"
+
+[[ecosystem]]
+name = "gradle"
+marker = "build.gradle*"
+hint = [
+  "Gradle project. The usual shape:",
+  "  lint   ./gradlew lint",
+  "  test   ./gradlew testDebugUnitTest",
+  "  suite  ./gradlew test",
+]
+
+[[ecosystem]]
+name = "gradle"
+marker = "settings.gradle*"
+hint = [
+  "Gradle project. The usual shape:",
+  "  lint   ./gradlew lint",
+  "  test   ./gradlew testDebugUnitTest",
+  "  suite  ./gradlew test",
+]
+
+[[ecosystem]]
+name = "maven"
+marker = "pom.xml"
+hint = ["Maven project. The usual shape:", "  test   mvn -q test"]
+
+# ---- Apple -----------------------------------------------------------------
+
+[[ecosystem]]
+name = "xcode"
+marker = "*.xcworkspace"
+hint = [
+  "Xcode workspace. The usual shape:",
+  "  lint   swiftlint lint --strict",
+  "  test   (leave empty unless you have a fast unit target)",
+  "  suite  xcodebuild test -workspace {name}.xcworkspace -scheme {name} -destination 'platform=iOS Simulator,name=iPhone 16' -quiet",
+]
+
+[[ecosystem]]
+name = "xcode"
+marker = "*.xcodeproj"
+hint = [
+  "Xcode project. The usual shape:",
+  "  lint   swiftlint lint --strict",
+  "  test   (leave empty unless you have a fast unit target)",
+  "  suite  xcodebuild test -scheme {name} -destination 'platform=iOS Simulator,name=iPhone 16' -quiet",
+]
+
+[[ecosystem]]
+name = "swift package"
+marker = "Package.swift"
+test = "swift test"
+hint = ["  lint   swiftlint lint --strict   (if you use SwiftLint)"]
+
+# ---- Dart / Flutter --------------------------------------------------------
+
+[[ecosystem]]
+name = "flutter"
+marker = "pubspec.yaml"
+contains = ["flutter"]
+test = "flutter test"
+lint = "flutter analyze"
+
+[[ecosystem]]
+name = "dart"
+marker = "pubspec.yaml"
+test = "dart test"
+lint = "dart analyze"
+
+# ---- C / C++ / Haskell -----------------------------------------------------
+
+[[ecosystem]]
+name = "cmake"
+marker = "CMakeLists.txt"
+hint = ["CMake project. The usual shape:", "  suite  cmake --build build && ctest --test-dir build"]
+
+[[ecosystem]]
+name = "haskell"
+marker = "stack.yaml"
+test = "stack test"
+
+[[ecosystem]]
+name = "haskell"
+marker = "*.cabal"
+test = "cabal test"

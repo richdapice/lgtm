@@ -66,7 +66,26 @@ suite = "xcodebuild test -scheme App -destination 'platform=iOS Simulator,name=i
 
 `test` and `lint` run at `check` (on your diff, before the review) and at every `recheck` (on what the fixer touched). A fix round that no check validated is not committed. `suite` is for a slow whole-project run that can't be scoped to changed files: once, after the fix rounds, before anything is pushed. A failed suite opens the PR as a draft with the output in the body, and `lgtm push` refuses to push.
 
-`init` proposes these from `package.json`, `go.mod`, `pyproject.toml`, and `Cargo.toml`, two levels deep; anything else you write by hand.
+`lgtm init` proposes these by reading the repo, two levels deep. A task runner comes first: a Makefile, justfile, or Taskfile with `test`, `lint` (or `check`), and `test-all` targets has already said how the project wants to be checked, whatever the language. Then a table of markers fills in the rest: package.json (vitest, jest, eslint, typecheck scripts), go.mod, Cargo.toml, pyproject.toml (ruff), Gemfile (rspec, rubocop), mix.exs, composer.json (phpunit, phpstan), .sln and .csproj, pubspec.yaml, deno.json, build.zig, stack.yaml and .cabal, Package.swift. Xcode, Gradle, Maven, and CMake are recognized but not guessed at, since the right command depends on a scheme or a module; init shows the usual shape and asks.
+
+The table is [ecosystems.toml](../internal/setup/ecosystems.toml) in the binary. Copy any of it to `~/.config/lgtm/ecosystems.toml` to add or override an entry; yours are tried first.
+
+```toml
+# ~/.config/lgtm/ecosystems.toml
+[[ecosystem]]
+name = "gotestsum"
+marker = "go.mod"
+test = "gotestsum ./..."
+```
+
+### Conventions
+
+The conventions lens reads whatever the repo keeps its rules in, without being told: `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.cursorrules`, `.windsurfrules`, `.clinerules`, and `CONVENTIONS.md` at the root and in every directory above a changed file, plus `.github/copilot-instructions.md` and `.cursor/rules/*.mdc` at the root, plus your global Claude, Codex, and Gemini instruction files. Anything else goes here:
+
+```toml
+[lgtm]
+conventions = ["CONTRIBUTING.md", "docs/style/*.md"]   # globs, relative to the root
+```
 
 ### The pull request
 
@@ -82,28 +101,41 @@ The comment is posted once the run is through, only if you set it. Placeholders:
 
 ### Agents
 
-Agents live in `~/.config/lgtm/config.toml`, not the repo. Any CLI that reads a prompt on stdin and answers on stdout works.
+Agents live in `~/.config/lgtm/config.toml`, not the repo. Any CLI that reads a prompt on stdin and answers on stdout works. Two commands per agent because reviewing and fixing are different jobs: the reviewer can read but not run anything; the fixer can edit but not run anything. Your checks are the only thing that executes code.
+
+`schema = "native"` means the CLI takes `--json-schema` and validates its own output (Claude Code). `schema = "prompt"` means the schema is pasted into the prompt and the reply is parsed leniently, then validated; use it for everything else. `model` is passed as `--model` when set, so leave it out for a CLI that spells the flag differently.
 
 ```toml
 default_agent = "claude"
 
-[[agent]]
+[[agent]]                # Claude Code: the default, and what the built-in config is
 name = "claude"
 command = ["claude", "-p", "--restricted", "--permission-prompts", "none", "--output-format", "json"]
 fix_command = ["claude", "-p", "--permission-mode", "acceptEdits", "--permission-prompts", "none",
                "--allowedTools", "Read,Edit,Write,Grep,Glob", "--output-format", "json"]
-schema = "native"        # the CLI validates JSON against a schema itself
+schema = "native"
 model = "opus"
 
-[[agent]]
+[[agent]]                # GitHub Copilot CLI
 name = "copilot"
 command = ["copilot", "-s", "--no-ask-user", "--deny-tool", "shell", "--deny-tool", "write"]
-schema = "prompt"        # schema goes in the prompt; the reply is parsed leniently, then validated
+fix_command = ["copilot", "-s", "--no-ask-user", "--deny-tool", "shell", "--allow-tool", "write"]
+schema = "prompt"
+
+[[agent]]                # Gemini CLI
+name = "gemini"
+command = ["gemini", "-p", "", "--approval-mode", "plan"]
+fix_command = ["gemini", "-p", "", "--approval-mode", "auto_edit"]
+schema = "prompt"
+
+[[agent]]                # Codex CLI
+name = "codex"
+command = ["codex", "exec", "--sandbox", "read-only", "--skip-git-repo-check", "-"]
+fix_command = ["codex", "exec", "--sandbox", "workspace-write", "--full-auto", "--skip-git-repo-check", "-"]
+schema = "prompt"
 ```
 
-Two commands per agent because reviewing and fixing are different jobs: the reviewer can read but not run anything; the fixer can edit but not run anything. Your checks are the only thing that executes code. `lgtm doctor` round-trips each agent once.
-
-
+Then in any repo, `agent = "copilot"` under `[lgtm]` picks one, or set `default_agent`. The Claude and Copilot recipes are verified; Gemini and Codex follow their documented flags and are not. `lgtm doctor` tells you either way: it asks each agent's review command for a one-word answer, then has the fix command create a file in a scratch directory and checks that it did.
 
 ## Costs
 

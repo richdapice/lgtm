@@ -66,7 +66,7 @@ A lens is a paragraph telling the reviewer what to look for. Four are built in, 
 | Lens | Looks for |
 |---|---|
 | **correctness** | bugs, edge cases, error handling that swallows or mis-reports failures, logic that doesn't do what the diff claims |
-| **conventions** | departures from your project's rules, read from your `CLAUDE.md` and `AGENTS.md`, and from the style of the surrounding code |
+| **conventions** | departures from your project's rules, read from `CLAUDE.md`, `AGENTS.md`, `.cursorrules` and the like, and from the style of the surrounding code |
 | **security** | secrets in source, injection, auth and permission mistakes, unsafe IPC or deserialization, data written where it shouldn't be |
 | **tests** | behavior that changed without a test changing, tests that don't assert the new behavior, tests that would pass if the change were reverted |
 
@@ -119,7 +119,7 @@ Every row of the bar is explained in [The status bar](docs/status-bar.md); the c
 - the lenses: turn one off, put one on a cheaper model, write your own
 - one review call or one per lens, or several passes on different models
 - what it leaves on the PR: reactions, a comment
-- which agent, if not Claude Code
+- which agent: Claude Code, Copilot, Gemini, Codex, or any CLI that reads stdin
 
 All of it in [Configuration](docs/configuration.md). Manual mode's panel and keys are in [Manual mode](docs/manual-mode.md).
 

@@ -414,7 +414,7 @@ func cmdInit(ctx context.Context, args []string) error {
 	if err := setup.Write(root, r); err != nil {
 		return err
 	}
-	fmt.Printf("wrote %s (%d project(s))\n", config.RepoFile, len(r.Projects))
+	fmt.Printf("\nwrote %s · %d project(s) · autopilot · 3 fix rounds\n", config.RepoFile, len(r.Projects))
 	if *bar {
 		exe, _ := os.Executable()
 		changed, err := setup.WireStatusline(exe)
@@ -614,11 +614,19 @@ func cmdDoctor(ctx context.Context) error {
 			failed++
 			continue
 		}
-		fix := "no fix_command (manual only)"
-		if len(a.FixCommand) > 0 {
-			fix = "fixes on"
+		fmt.Printf("  ✓ %-10s review · %s · %s\n", a.Name, a.Schema, time.Since(start).Round(100*time.Millisecond))
+		if len(a.FixCommand) == 0 {
+			fmt.Printf("  · %-10s no fix_command: findings are yours to fix\n", "")
+			continue
 		}
-		fmt.Printf("  ✓ %-10s %s · %s · %s\n", a.Name, a.Schema, fix, time.Since(start).Round(100*time.Millisecond))
+		start = time.Now()
+		fixer := agent.Adapter{Name: a.Name, Command: a.FixCommand, Model: a.Model, Cap: cap}
+		if err := fixer.ProbeFix(ctx); err != nil {
+			fmt.Printf("  ✗ %-10s fix: %v\n", "", err)
+			failed++
+			continue
+		}
+		fmt.Printf("  ✓ %-10s fix · wrote a file in a scratch dir · %s\n", "", time.Since(start).Round(100*time.Millisecond))
 	}
 	if failed > 0 {
 		return fmt.Errorf("%d agent(s) failed", failed)
