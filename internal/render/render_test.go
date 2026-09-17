@@ -169,3 +169,17 @@ func TestGateTrackRow(t *testing.T) {
 		fmt.Println(out)
 	}
 }
+
+// A run at 11pm Mountain is stored as 5am UTC the next day. It is still today.
+func TestRunsTodayUsesViewerTimeZone(t *testing.T) {
+	denver, _ := time.LoadLocation("America/Denver")
+	now := time.Date(2026, 9, 16, 23, 40, 0, 0, denver)
+	hist := []run.Summary{
+		{Branch: "x", EndedAt: time.Date(2026, 9, 17, 5, 27, 0, 0, time.UTC), Duration: time.Minute, Outcome: run.Done},
+		{Branch: "y", EndedAt: time.Date(2026, 9, 15, 20, 0, 0, 0, time.UTC), Duration: time.Minute, Outcome: run.Done},
+	}
+	out := Render(Input{History: hist, IdleRef: "main", Now: now}, Style{Cols: 100})
+	if !strings.Contains(out, "1 runs today") {
+		t.Fatalf("got:\n%s", out)
+	}
+}

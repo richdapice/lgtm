@@ -136,7 +136,9 @@ func idle(in Input, st Style) string {
 	today, held := 0, 0
 	y, m, d := in.Now.Date()
 	for _, h := range in.History {
-		if hy, hm, hd := h.EndedAt.Date(); hy == y && hm == m && hd == d {
+		// history is stored in UTC; "today" is the viewer's day, so a run at
+		// 11pm Mountain must not slip into tomorrow
+		if hy, hm, hd := h.EndedAt.In(in.Now.Location()).Date(); hy == y && hm == m && hd == d {
 			today++
 			if h.Outcome == run.Held {
 				held++
