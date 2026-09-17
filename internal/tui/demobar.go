@@ -75,7 +75,7 @@ func DemoBar(ctx context.Context, opt DemoBarOptions) error {
 	frame := func(d time.Duration) bool {
 		end := time.Now().Add(d)
 		for time.Now().Before(end) {
-			if !draw(render.Input{Runs: []*run.Run{r}, History: hist, Now: time.Now(), Plan: plan}) {
+			if !draw(render.Input{Runs: []*run.Run{r}, History: hist, Repo: "crmaapp", RepoKey: "demo", Now: time.Now(), Plan: plan}) {
 				return false
 			}
 		}
@@ -102,9 +102,11 @@ func DemoBar(ctx context.Context, opt DemoBarOptions) error {
 				}
 				f := float64(step) / 20 * speeds[i]
 				if f >= 1 {
-					r.Lenses[i].State, r.Lenses[i].Frac, r.Lenses[i].Found, r.Lenses[i].EndedAt = run.LensDone, 1, found[i], time.Now()
+					r.Lenses[i].State, r.Lenses[i].Found, r.Lenses[i].EndedAt = run.LensDone, found[i], time.Now()
 				} else {
-					r.Lenses[i].Frac = f
+					// the sweep advances one cell per elapsed second; wind the
+					// clock back so a 160ms frame moves it
+					r.Lenses[i].StartedAt = time.Now().Add(-time.Duration(step) * time.Second)
 				}
 			}
 			if !frame(160 * time.Millisecond) {
@@ -116,7 +118,7 @@ func DemoBar(ctx context.Context, opt DemoBarOptions) error {
 		for i := range r.Lenses {
 			r.Lenses[i].State, r.Lenses[i].StartedAt = run.Running, time.Now()
 			for step := 0; step <= 10; step++ {
-				r.Lenses[i].Frac = float64(step) / 10
+				r.Lenses[i].StartedAt = time.Now().Add(-time.Duration(step) * time.Second)
 				if !frame(150 * time.Millisecond) {
 					return nil
 				}
@@ -125,7 +127,7 @@ func DemoBar(ctx context.Context, opt DemoBarOptions) error {
 		}
 	default:
 		for i := 0; i <= 10; i++ {
-			r.Lenses[0].Frac = float64(i) / 10
+			r.Lenses[0].StartedAt = time.Now().Add(-time.Duration(i) * time.Second)
 			if !frame(220 * time.Millisecond) {
 				return nil
 			}
@@ -186,10 +188,10 @@ func DemoBar(ctx context.Context, opt DemoBarOptions) error {
 	}
 	// idle
 	r.PID = 0
-	hist = append(hist, run.Summary{EndedAt: time.Now(), Duration: 4*time.Minute + time.Second, Outcome: run.Done})
+	hist = append(hist, run.Summary{Repo: "demo", Branch: r.Branch, EndedAt: time.Now().Add(-41 * time.Minute), Duration: 4*time.Minute + time.Second, Outcome: run.Done, Found: 2, Fixed: 2})
 	end := time.Now().Add(2500 * time.Millisecond)
 	for time.Now().Before(end) {
-		if !draw(render.Input{History: hist, IdleRef: "main", Now: time.Now(), Plan: plan}) {
+		if !draw(render.Input{History: hist, IdleRef: "main", Repo: "crmaapp", RepoKey: "demo", Now: time.Now(), Plan: plan}) {
 			return nil
 		}
 	}

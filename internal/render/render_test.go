@@ -22,11 +22,11 @@ func discoverRun() *run.Run {
 	r.CostUSD = 0.09
 	r.Lenses[0].State, r.Lenses[0].Found = run.LensDone, 7
 	r.Lenses[0].StartedAt, r.Lenses[0].EndedAt = r.StartedAt, r.StartedAt.Add(42*time.Second)
-	r.Lenses[1].State, r.Lenses[1].Frac, r.Lenses[1].Found = run.Running, .68, 3
+	r.Lenses[1].State, r.Lenses[1].Found = run.Running, 3
 	r.Lenses[1].StartedAt = now.Add(-12 * time.Second)
 	r.Lenses[2].State, r.Lenses[2].Found = run.LensDone, 2
 	r.Lenses[2].StartedAt, r.Lenses[2].EndedAt = r.StartedAt, r.StartedAt.Add(38*time.Second)
-	r.Lenses[3].State, r.Lenses[3].Frac = run.Running, .49
+	r.Lenses[3].State = run.Running
 	r.Lenses[3].StartedAt = now.Add(-64 * time.Second)
 	return r
 }
@@ -47,8 +47,8 @@ func TestDiscoverLayout(t *testing.T) {
 	if !strings.Contains(ls[1], "╭ correctness  ─────────────  ✓  7   opus      42s") {
 		t.Fatalf("lens row 1 = %q", ls[1])
 	}
-	if !strings.Contains(ls[2], "│ conventions  ████████▊░░░░     –   haiku     12s") {
-		t.Fatalf("lens row 2 (eighth-block fill) = %q", ls[2])
+	if !strings.Contains(ls[2], "│ conventions  ░░░░░░░░░░▒▓█     –   haiku     12s") {
+		t.Fatalf("lens row 2 (sweep at 12s) = %q", ls[2])
 	}
 	if !strings.HasPrefix(strings.TrimLeft(ls[4], " "), "╰ tests") {
 		t.Fatalf("last lens row = %q", ls[4])
@@ -105,8 +105,19 @@ func TestCIAndIdleAndMulti(t *testing.T) {
 	hist[3].Outcome = run.Held
 	out = Render(Input{History: hist, IdleRef: "main", Now: now}, Style{Cols: 100})
 	ls = lines(out)
-	if len(ls) != 2 || !strings.Contains(ls[0], "idle   20 runs today") || !strings.Contains(ls[1], "20 runs  ▁") || !strings.Contains(ls[1], "1 held") || !strings.Contains(ls[1], "streak 16") {
+	if len(ls) != 2 || !strings.Contains(ls[0], "lgtm ▸ main   idle") || !strings.HasPrefix(ls[1], " runs ▁") || !strings.Contains(ls[1], "20 today") || !strings.Contains(ls[1], "streak 16") {
 		t.Fatalf("idle layout:\n%s", out)
+	}
+	// with a repo: name in the header, its last run on the second row
+	hist[19].Repo, hist[19].Branch, hist[19].Found, hist[19].Fixed = "/r/.git", "worktree-sync-throttle", 3, 2
+	hist[19].EndedAt = now.Add(-41 * time.Minute)
+	out = Render(Input{History: hist, IdleRef: "main", Repo: "crmaapp", RepoKey: "/r/.git", Now: now}, Style{Cols: 100})
+	ls = lines(out)
+	if !strings.Contains(ls[0], "lgtm ▸ crmaapp · main   idle") || !strings.HasPrefix(ls[1], " last ✓ sync-throttle · 3 found · 2 fixed · 41m ago      ▁") {
+		t.Fatalf("idle with repo:\n%s", out)
+	}
+	if w := width(ls[1]); w > 100 {
+		t.Fatalf("idle row too wide (%d): %q", w, ls[1])
 	}
 
 	r2 := discoverRun()
@@ -179,7 +190,28 @@ func TestRunsTodayUsesViewerTimeZone(t *testing.T) {
 		{Branch: "y", EndedAt: time.Date(2026, 9, 15, 20, 0, 0, 0, time.UTC), Duration: time.Minute, Outcome: run.Done},
 	}
 	out := Render(Input{History: hist, IdleRef: "main", Now: now}, Style{Cols: 100})
-	if !strings.Contains(out, "1 runs today") {
+	if !strings.Contains(out, "1 today") {
 		t.Fatalf("got:\n%s", out)
+	}
+}
+
+// A repo name plus a long worktree branch must not push the header past the
+// terminal: the plan windows go first, the worktree- prefix never shows.
+func TestHeaderFitsWithRepo(t *testing.T) {
+	r := discoverRun()
+	plan := &PlanUsage{FiveHourPct: 37, SevenDayPct: 61, FiveHourReset: now.Add(2 * time.Hour), SevenDayReset: now.Add(72 * time.Hour)}
+	for _, cols := range []int{100, 80} {
+		out := Render(Input{Runs: []*run.Run{r}, Repo: "crmaapp", Plan: plan, Now: now}, Style{Cols: cols})
+		h := lines(out)[0]
+		if width(h) > cols {
+			t.Fatalf("%d cols: header %d wide: %q", cols, width(h), h)
+		}
+		if !strings.Contains(h, "crmaapp · r2-incremental-cache → main") {
+			t.Fatalf("header = %q", h)
+		}
+	}
+	out := Render(Input{Runs: []*run.Run{r}, Repo: "crmaapp", Plan: plan, Now: now}, Style{Cols: 120})
+	if !strings.Contains(lines(out)[0], "5h 37%") {
+		t.Fatalf("wide terminal should keep the plan: %q", lines(out)[0])
 	}
 }
