@@ -90,8 +90,10 @@ func main() {
 			fs := flag.NewFlagSet("demo bar", flag.ExitOnError)
 			par := fs.Bool("parallel", false, "one bar per lens, filling at different rates")
 			passes := fs.Int("passes", 1, "review rows in sequence")
+			look := fs.String("look", os.Getenv("LGTM_LOOK"), "idle styling: segments | meters")
+			idle := fs.Bool("idle", false, "draw only the idle frame")
 			fs.Parse(args[1:])
-			err = tui.DemoBar(ctx, tui.DemoBarOptions{Parallel: *par, Passes: *passes})
+			err = tui.DemoBar(ctx, tui.DemoBarOptions{Parallel: *par, Passes: *passes, Look: *look, IdleOnly: *idle})
 		} else {
 			fs := flag.NewFlagSet("demo", flag.ExitOnError)
 			auto := fs.Bool("auto", false, "the run on autopilot: no panel, nobody asked")
@@ -249,7 +251,11 @@ func cmdStatusline(args []string) error {
 			}
 		}
 	}
-	style := render.Style{Cols: cols, Color: os.Getenv("NO_COLOR") == ""}
+	look := os.Getenv("LGTM_LOOK")
+	if len(args) >= 2 && args[0] == "--look" {
+		look = args[1]
+	}
+	style := render.Style{Cols: cols, Color: os.Getenv("NO_COLOR") == "", Look: look}
 	common, err := gitx.FindCommonDir(dir)
 	if err != nil {
 		// outside a repo there's no run to show, but the plan windows are

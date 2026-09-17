@@ -17,8 +17,10 @@ import (
 // looks like the bar does inside Claude Code.
 // DemoBarOptions picks the review shape the scripted run draws.
 type DemoBarOptions struct {
-	Parallel bool // one row per lens, filling at different rates
-	Passes   int  // review rows in sequence (batch dispatch); 1 = the default
+	Parallel bool   // one row per lens, filling at different rates
+	Passes   int    // review rows in sequence (batch dispatch); 1 = the default
+	Look     string // idle styling: segments | meters | ""
+	IdleOnly bool   // draw just the idle frame and hold it
 }
 
 func DemoBar(ctx context.Context, opt DemoBarOptions) error {
@@ -26,7 +28,7 @@ func DemoBar(ctx context.Context, opt DemoBarOptions) error {
 	if c := os.Getenv("COLUMNS"); c != "" {
 		fmt.Sscanf(c, "%d", &cols)
 	}
-	st := render.Style{Cols: cols, Color: os.Getenv("NO_COLOR") == ""}
+	st := render.Style{Cols: cols, Color: os.Getenv("NO_COLOR") == "", Look: opt.Look}
 	now := time.Now()
 	plan := &render.PlanUsage{FiveHourPct: 37, SevenDayPct: 61, FiveHourReset: now.Add(2*time.Hour + 23*time.Minute), SevenDayReset: now.Add(76 * time.Hour)}
 	if opt.Passes < 1 {
@@ -58,6 +60,15 @@ func DemoBar(ctx context.Context, opt DemoBarOptions) error {
 	hist[6].Outcome, hist[13].Outcome = run.Held, run.Held
 
 	var prev int
+	idleHist := append(append([]run.Summary(nil), hist...), run.Summary{Repo: "demo", Branch: "worktree-sync-throttle", EndedAt: time.Now().Add(-41 * time.Minute), Duration: 4*time.Minute + time.Second, Outcome: run.Done, Found: 3, Fixed: 3})
+	if opt.IdleOnly {
+		fmt.Println(render.Render(render.Input{History: idleHist, IdleRef: "main", Repo: "crmaapp", RepoKey: "demo", Now: time.Now(), Plan: plan}, st))
+		select {
+		case <-ctx.Done():
+		case <-time.After(1500 * time.Millisecond):
+		}
+		return nil
+	}
 	draw := func(in render.Input) bool {
 		if prev > 0 {
 			fmt.Printf("\033[%dA\033[J", prev)

@@ -28,6 +28,34 @@ const (
 type Style struct {
 	Color bool
 	Cols  int
+	// Look picks the idle styling: "segments" (colored background blocks and
+	// plan meters), "meters" (glyph accents and bracketed meters), or "" for
+	// the plain rows.
+	Look string
+}
+
+// seg is a filled background block: white-on-color text with a space of
+// padding either side, the powerline idiom without the arrow glyphs.
+func (s Style) seg(bg, text string) string {
+	if !s.Color {
+		return "[" + text + "]"
+	}
+	return "\033[48;5;" + bg + ";38;5;255;1m " + text + " \033[0m"
+}
+
+// meter is a ten-cell usage bar colored by how full it is.
+func meter(pct int, st Style, open, close string) string {
+	n := max(min(pct/10, 10), 0)
+	col := dim
+	switch {
+	case pct >= 90:
+		col = bad
+	case pct >= 70:
+		col = warn
+	case pct > 0:
+		col = good
+	}
+	return st.c(dim, open) + st.c(col, strings.Repeat("▰", n)) + st.c(dim, strings.Repeat("▱", 10-n)+close)
 }
 
 func (s Style) c(code, text string) string {
@@ -78,6 +106,20 @@ type PlanUsage struct {
 func (p *PlanUsage) render(st Style, now time.Time) string {
 	if p == nil {
 		return ""
+	}
+	if st.Look != "" {
+		win := func(label string, pct int, reset time.Time) string {
+			open, close := "", ""
+			if st.Look == "meters" {
+				open, close = "▕", "▏"
+			}
+			s := st.c(dim, label+" ") + meter(pct, st, open, close) + st.c(dim, fmt.Sprintf(" %d%%", pct))
+			if !reset.IsZero() && reset.After(now) {
+				s += st.c(dim, " ↺ "+until(reset.Sub(now)))
+			}
+			return s
+		}
+		return win("5h", p.FiveHourPct, p.FiveHourReset) + "   " + win("7d", p.SevenDayPct, p.SevenDayReset)
 	}
 	col := func(pct int) string {
 		switch {
@@ -164,18 +206,53 @@ func idle(in Input, st Style) string {
 	if in.NoRepo {
 		state = "not a repo"
 	}
-	head := st.c(bold, "lgtm") + " ▸ " + where(in, strings.TrimPrefix(in.IdleRef, "worktree-"), st) + "   " + st.c(dim, state)
+	ref := strings.TrimPrefix(in.IdleRef, "worktree-")
+	var head, label, left string
+	switch st.Look {
+	case "segments":
+		head = st.seg("30", "lgtm")
+		if in.Repo != "" {
+			head += st.seg("24", in.Repo)
+		}
+		head += st.seg("25", ref) + st.seg("238", state)
+	case "meters":
+		head = st.c(accent, "◉ ") + where(in, ref, st) + "   " + st.c(dim, state)
+		label = st.c(accent, "⟡")
+	default:
+		head = st.c(bold, "lgtm") + " ▸ " + where(in, ref, st) + "   " + st.c(dim, state)
+		label = st.c(dim, "runs")
+	}
 	rows := []string{row(st, "", fit(head, in.Plan.render(st, in.Now), st), "", "lgtm")}
 	if len(in.History) == 0 {
 		return rows[0]
 	}
 	// second row: what happened last in this repo, then the wider picture
-	label, left := "runs", ""
 	if last != nil {
-		label, left = "last", lastRun(*last, in.Now, st)+"      "
+		left = lastRun(*last, in.Now, st) + "      "
+		if st.Look == "" {
+			label = st.c(dim, "last")
+		}
 	}
-	rows = append(rows, row(st, st.c(dim, label), left+sparkRow(in.History, today, st), "", label))
+	rows = append(rows, row(st, label, left+sparkRow(in.History, today, st), "", strip(label)))
 	return strings.Join(rows, "\n")
+}
+
+// strip is the visible text of a styled label, for the gutter math.
+func strip(s string) string {
+	var b strings.Builder
+	for i := 0; i < len(s); {
+		if s[i] == 0x1b {
+			j := i + 1
+			for j < len(s) && !(s[j] >= '@' && s[j] <= '~') {
+				j++
+			}
+			i = j + 1
+			continue
+		}
+		b.WriteByte(s[i])
+		i++
+	}
+	return b.String()
 }
 
 // lastRun is one run in a few words: how it ended, on what, with what, when.
@@ -192,6 +269,9 @@ func lastRun(h run.Summary, now time.Time, st Style) string {
 		mark, tail = st.c(warn, "→"), "needed you"
 	default:
 		mark, tail = st.c(bad, "✗"), "failed"
+	}
+	if st.Look != "" {
+		return st.c(accent, strings.TrimPrefix(h.Branch, "worktree-")) + " " + mark + st.c(dim, " "+tail+"  "+ago(now.Sub(h.EndedAt)))
 	}
 	return mark + " " + st.c(accent, strings.TrimPrefix(h.Branch, "worktree-")) +
 		st.c(dim, " · "+tail+" · "+ago(now.Sub(h.EndedAt)))
@@ -219,7 +299,11 @@ func sparkRow(h []run.Summary, today int, st Style) string {
 		case run.Failed:
 			ch = st.c(bad, ch)
 		default:
-			ch = st.c(dim, ch)
+			if st.Look != "" {
+				ch = st.c(good, ch)
+			} else {
+				ch = st.c(dim, ch)
+			}
 		}
 		b.WriteString(ch)
 	}
