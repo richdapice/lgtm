@@ -21,7 +21,7 @@
 | `lgtm decide ID fix\|accept\|dismiss\|skip` | Record a decision on a waiting run, no terminal needed. `-m "…"` gives the fixer a direction. |
 | `lgtm continue [--auto]` | Apply recorded decisions and carry on. |
 | `lgtm dismiss ID` | Never show this finding again. Goes on a list committed with the repo. |
-| `lgtm init` | Read the repo (task runners, then [what it recognizes](configuration.md#your-checks)), show what it would run, write `.lgtm.toml`. `--statusline` and `--skill` wire up Claude Code (once, globally). |
+| `lgtm init` | Read the repo (task runners, then [what it recognizes](configuration.md#your-checks)), show what it would run, write `.lgtm.toml`. The first time on a machine it also finds the agent CLIs on your PATH, asks which one reviews, writes `~/.config/lgtm/config.toml`, and probes it. `--agent NAME` picks or changes it; `--statusline` and `--skill` wire up Claude Code (once, globally). |
 | `lgtm doctor` | Check each configured agent answers, and that its fixer can edit. |
 | `lgtm demo` · `lgtm demo bar` | A scripted run in the panel or the status bar. No agent, no repo. `--parallel`, `--passes N`. |
 | `lgtm -h` | The same list, with every flag. |

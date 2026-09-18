@@ -4,6 +4,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -404,6 +405,7 @@ func cmdInit(ctx context.Context, args []string) error {
 	yes := fs.Bool("y", false, "accept detected defaults without asking")
 	bar := fs.Bool("statusline", false, "add lgtm to Claude Code's status bar (~/.claude/settings.json)")
 	sk := fs.Bool("skill", false, "install the /lgtm skill for Claude Code (~/.claude/skills/lgtm)")
+	agentPick := fs.String("agent", "", "which agent CLI reviews and fixes (claude, copilot, gemini, codex); asked when unset")
 	fs.Parse(args)
 	cwd, _ := os.Getwd()
 	root, err := gitx.Root(ctx, cwd)
@@ -417,7 +419,8 @@ func cmdInit(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	r, ok := setup.Prompt(os.Stdin, os.Stdout, d, *yes)
+	in := bufio.NewReader(os.Stdin)
+	r, ok := setup.Prompt(in, os.Stdout, d, *yes)
 	if !ok {
 		fmt.Printf("\nnothing written\n")
 		if *bar || *sk {
@@ -429,6 +432,9 @@ func cmdInit(ctx context.Context, args []string) error {
 		return err
 	}
 	fmt.Printf("\nwrote %s · %d project(s) · autopilot · 3 fix rounds\n", config.RepoFile, len(r.Projects))
+	if err := initAgent(ctx, in, *yes, *agentPick); err != nil {
+		return err
+	}
 	if *bar {
 		exe, _ := os.Executable()
 		changed, err := setup.WireStatusline(exe)
@@ -452,8 +458,68 @@ func cmdInit(ctx context.Context, args []string) error {
 			fmt.Println("skill: up to date")
 		}
 	}
-	fmt.Println("next: lgtm doctor")
+	fmt.Println("next: commit on a branch, then lgtm")
 	return nil
+}
+
+// initAgent is the machine-wide half of init: which CLI does the reviewing.
+// Asked once, the first time, or whenever --agent is given; the answer is
+// probed on the spot so a recipe that doesn't work here is found now, not
+// mid-run.
+func initAgent(ctx context.Context, in *bufio.Reader, yes bool, pick string) error {
+	if config.GlobalExists() && pick == "" {
+		g, err := config.LoadGlobal()
+		if err != nil {
+			return err
+		}
+		fmt.Printf("agent: %s (%s; lgtm init --agent NAME to change)\n", g.DefaultAgent, config.GlobalPath())
+		return nil
+	}
+	found := setup.DetectAgents()
+	name, ok := setup.PromptAgent(in, os.Stdout, found, yes, pick)
+	if !ok {
+		return nil
+	}
+	// every recipe on the machine goes in the file, so switching later is a
+	// one-word edit; only the pick is probed
+	g := &config.Global{DefaultAgent: name, Agents: found}
+	if err := config.WriteGlobal(g); err != nil {
+		return err
+	}
+	fmt.Printf("wrote %s\n", config.GlobalPath())
+	a, _ := g.Agent(name)
+	if !probe(ctx, a) {
+		return fmt.Errorf("%s didn't pass the probe; fix its setup and run lgtm doctor", name)
+	}
+	return nil
+}
+
+// probe round-trips one agent in both postures and prints a row per result.
+func probe(ctx context.Context, a config.Agent) bool {
+	cap, err := agent.ParseCapability(a.Schema)
+	if err != nil {
+		fmt.Printf("  ✗ %-10s %v\n", a.Name, err)
+		return false
+	}
+	ad := agent.Adapter{Name: a.Name, Command: a.Command, Model: a.Model, Cap: cap}
+	start := time.Now()
+	if err := ad.Probe(ctx); err != nil {
+		fmt.Printf("  ✗ %-10s %v\n", a.Name, err)
+		return false
+	}
+	fmt.Printf("  ✓ %-10s review · %s · %s\n", a.Name, a.Schema, time.Since(start).Round(100*time.Millisecond))
+	if len(a.FixCommand) == 0 {
+		fmt.Printf("  · %-10s no fix_command: findings are yours to fix\n", "")
+		return true
+	}
+	start = time.Now()
+	fixer := agent.Adapter{Name: a.Name, Command: a.FixCommand, Model: a.Model, Cap: cap}
+	if err := fixer.ProbeFix(ctx); err != nil {
+		fmt.Printf("  ✗ %-10s fix: %v\n", "", err)
+		return false
+	}
+	fmt.Printf("  ✓ %-10s fix · wrote a file in a scratch dir · %s\n", "", time.Since(start).Round(100*time.Millisecond))
+	return true
 }
 
 // flagsFirst lets flags follow positionals (`lgtm decide ID accept -b X`):
@@ -615,32 +681,9 @@ func cmdDoctor(ctx context.Context) error {
 	fmt.Printf("config  %s\n", config.GlobalPath())
 	failed := 0
 	for _, a := range g.Agents {
-		cap, err := agent.ParseCapability(a.Schema)
-		if err != nil {
-			fmt.Printf("  ✗ %-10s %v\n", a.Name, err)
+		if !probe(ctx, a) {
 			failed++
-			continue
 		}
-		ad := agent.Adapter{Name: a.Name, Command: a.Command, Model: a.Model, Cap: cap}
-		start := time.Now()
-		if err := ad.Probe(ctx); err != nil {
-			fmt.Printf("  ✗ %-10s %v\n", a.Name, err)
-			failed++
-			continue
-		}
-		fmt.Printf("  ✓ %-10s review · %s · %s\n", a.Name, a.Schema, time.Since(start).Round(100*time.Millisecond))
-		if len(a.FixCommand) == 0 {
-			fmt.Printf("  · %-10s no fix_command: findings are yours to fix\n", "")
-			continue
-		}
-		start = time.Now()
-		fixer := agent.Adapter{Name: a.Name, Command: a.FixCommand, Model: a.Model, Cap: cap}
-		if err := fixer.ProbeFix(ctx); err != nil {
-			fmt.Printf("  ✗ %-10s fix: %v\n", "", err)
-			failed++
-			continue
-		}
-		fmt.Printf("  ✓ %-10s fix · wrote a file in a scratch dir · %s\n", "", time.Since(start).Round(100*time.Millisecond))
 	}
 	if failed > 0 {
 		return fmt.Errorf("%d agent(s) failed", failed)

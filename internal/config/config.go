@@ -180,6 +180,67 @@ func DefaultClaude() Agent {
 	}
 }
 
+// Recipes are the agents lgtm knows how to drive out of the box, in the
+// order init offers them. Each is a reviewer that can read but not run, and
+// a fixer that can edit but not run. Claude and Copilot are verified; Gemini
+// and Codex follow their documented flags, and init's probe is what verifies
+// them on a given machine.
+func Recipes() []Agent {
+	return []Agent{
+		DefaultClaude(),
+		{
+			Name:       "copilot",
+			Command:    []string{"copilot", "-s", "--no-ask-user", "--deny-tool", "shell", "--deny-tool", "write"},
+			FixCommand: []string{"copilot", "-s", "--no-ask-user", "--deny-tool", "shell", "--allow-tool", "write"},
+			Schema:     "prompt",
+		},
+		{
+			Name:       "gemini",
+			Command:    []string{"gemini", "-p", "", "--approval-mode", "plan"},
+			FixCommand: []string{"gemini", "-p", "", "--approval-mode", "auto_edit"},
+			Schema:     "prompt",
+		},
+		{
+			Name:       "codex",
+			Command:    []string{"codex", "exec", "--sandbox", "read-only", "--skip-git-repo-check", "-"},
+			FixCommand: []string{"codex", "exec", "--sandbox", "workspace-write", "--skip-git-repo-check", "-"},
+			Schema:     "prompt",
+		},
+	}
+}
+
+// GlobalExists reports whether the user has a config file at all, which is
+// how init decides whether to ask about agents.
+func GlobalExists() bool {
+	_, err := os.Stat(GlobalPath())
+	return err == nil
+}
+
+// WriteGlobal writes the user config with a header saying what it is for.
+func WriteGlobal(g *Global) error {
+	p := GlobalPath()
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		return err
+	}
+	f, err := os.Create(p)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	fmt.Fprint(f, `# lgtm — which agent reviews and fixes, machine-wide.
+#
+# default_agent picks one of the [[agent]] entries below; a repo can override
+# it with agent = "name" under [lgtm] in .lgtm.toml. Each agent has a review
+# command (reads, never runs) and a fix_command (edits, never runs). Any CLI
+# that takes a prompt on stdin and answers on stdout can be added the same
+# way; schema = "native" only for CLIs that accept --json-schema.
+#
+# lgtm doctor checks every agent here.
+
+`)
+	return toml.NewEncoder(f).Encode(g)
+}
+
 func (g *Global) Agent(name string) (Agent, bool) {
 	if name == "" {
 		name = g.DefaultAgent

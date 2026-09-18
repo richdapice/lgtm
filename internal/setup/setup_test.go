@@ -1,6 +1,7 @@
 package setup
 
 import (
+	"bufio"
 	"os"
 	"path/filepath"
 	"strings"
@@ -137,7 +138,7 @@ func TestPromptDetectedIsOneQuestion(t *testing.T) {
 	root := t.TempDir()
 	d := Detected{Projects: []Project{{Project: config.Project{Path: ".", Test: "go test ./...", Lint: "go vet ./..."}, Kind: "go"}}}
 	var out strings.Builder
-	r, ok := Prompt(strings.NewReader("\n"), &out, d, false) // Enter = write
+	r, ok := Prompt(bufio.NewReader(strings.NewReader("\n")), &out, d, false) // Enter = write
 	if !ok {
 		t.Fatal("Enter should write")
 	}
@@ -163,7 +164,7 @@ func TestPromptEditWalksEveryField(t *testing.T) {
 	d := Detected{Projects: []Project{{Project: config.Project{Path: ".", Test: "go test ./...", Lint: "go vet ./..."}, Kind: "go"}}}
 	var out strings.Builder
 	// e -> lint: keep; test: clear; suite: "true"
-	r, _ := Prompt(strings.NewReader("e\n\n-\ntrue\n"), &out, d, false)
+	r, _ := Prompt(bufio.NewReader(strings.NewReader("e\n\n-\ntrue\n")), &out, d, false)
 	p := r.Projects[0]
 	if p.Lint != "go vet ./..." || p.Test != "" || p.Suite != "true" {
 		t.Fatalf("got %+v", p)
@@ -174,7 +175,7 @@ func TestPromptBlankProjectValidatesCommands(t *testing.T) {
 	d := Detected{Projects: []Project{{Project: config.Project{Path: "."}, Kind: "xcode", Hints: []string{"Xcode project. The usual shape:"}}}}
 	var out strings.Builder
 	// blank project goes straight to edit: lint "iij" (not on PATH) -> use anyway? n -> "true"; test empty; suite empty
-	r, _ := Prompt(strings.NewReader("iij\nn\ntrue\n\n\n"), &out, d, false)
+	r, _ := Prompt(bufio.NewReader(strings.NewReader("iij\nn\ntrue\n\n\n")), &out, d, false)
 	if r.Projects[0].Lint != "true" || r.Projects[0].Test != "" {
 		t.Fatalf("got %+v", r.Projects[0])
 	}
@@ -186,7 +187,7 @@ func TestPromptBlankProjectValidatesCommands(t *testing.T) {
 
 func TestPromptYesSkipsQuestions(t *testing.T) {
 	var out strings.Builder
-	r, _ := Prompt(strings.NewReader(""), &out, Detected{Projects: []Project{{Project: config.Project{Path: "."}}}}, true)
+	r, _ := Prompt(bufio.NewReader(strings.NewReader("")), &out, Detected{Projects: []Project{{Project: config.Project{Path: "."}}}}, true)
 	if r.Settings.Mode != "auto" || r.Settings.MaxFixRounds != 3 {
 		t.Fatalf("defaults = %+v", r.Settings)
 	}
@@ -225,7 +226,7 @@ func TestHintsNotRepeated(t *testing.T) {
 
 func TestPromptDeclineWritesNothing(t *testing.T) {
 	d := Detected{Projects: []Project{{Project: config.Project{Path: ".", Test: "go test ./..."}, Kind: "go"}}}
-	if _, ok := Prompt(strings.NewReader("n\n"), &strings.Builder{}, d, false); ok {
+	if _, ok := Prompt(bufio.NewReader(strings.NewReader("n\n")), &strings.Builder{}, d, false); ok {
 		t.Fatal("n must decline")
 	}
 }
@@ -234,7 +235,10 @@ func TestPromptStopsAtEOF(t *testing.T) {
 	// a blank project is walked; stdin ends immediately. Must not loop.
 	d := Detected{Projects: []Project{{Project: config.Project{Path: "."}, Kind: "xcode"}}}
 	done := make(chan config.Repo, 1)
-	go func() { r, _ := Prompt(strings.NewReader(""), &strings.Builder{}, d, false); done <- r }()
+	go func() {
+		r, _ := Prompt(bufio.NewReader(strings.NewReader("")), &strings.Builder{}, d, false)
+		done <- r
+	}()
 	select {
 	case r := <-done:
 		if len(r.Projects) != 1 || r.Projects[0].Test != "" {
@@ -254,7 +258,7 @@ func TestBlankNestedProjectIsShownThenDropped(t *testing.T) {
 		t.Fatalf("ios must be shown with its hints: %+v", d.Projects)
 	}
 	var out strings.Builder
-	r, _ := Prompt(strings.NewReader("\n\n\n"), &out, d, false) // ios walked, left blank
+	r, _ := Prompt(bufio.NewReader(strings.NewReader("\n\n\n")), &out, d, false) // ios walked, left blank
 	if len(r.Projects) != 1 || r.Projects[0].Path != "." {
 		t.Fatalf("blank ios must not shadow the root: %+v", r.Projects)
 	}

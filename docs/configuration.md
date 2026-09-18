@@ -101,7 +101,7 @@ The comment is posted once the run is through, only if you set it. Placeholders:
 
 ### Agents
 
-Agents live in `~/.config/lgtm/config.toml`, not the repo. Any CLI that reads a prompt on stdin and answers on stdout works. Two commands per agent because reviewing and fixing are different jobs: the reviewer can read but not run anything; the fixer can edit but not run anything. Your checks are the only thing that executes code.
+Agents live in `~/.config/lgtm/config.toml`, not the repo. `lgtm init` writes it the first time: it looks for `claude`, `copilot`, `gemini`, and `codex` on your PATH, asks which one reviews and fixes, writes a recipe for every one it found, and probes your pick in both postures before it says done. `lgtm init --agent copilot` switches later. Any CLI that reads a prompt on stdin and answers on stdout works; add it by hand the same way. Two commands per agent because reviewing and fixing are different jobs: the reviewer can read but not run anything; the fixer can edit but not run anything. Your checks are the only thing that executes code.
 
 `schema = "native"` means the CLI takes `--json-schema` and validates its own output (Claude Code). `schema = "prompt"` means the schema is pasted into the prompt and the reply is parsed leniently, then validated; use it for everything else. `model` is passed as `--model` when set, so leave it out for a CLI that spells the flag differently.
 
@@ -135,7 +135,7 @@ fix_command = ["codex", "exec", "--sandbox", "workspace-write", "--skip-git-repo
 schema = "prompt"
 ```
 
-Then in any repo, `agent = "copilot"` under `[lgtm]` picks one, or set `default_agent`. The Claude and Copilot recipes are verified; Gemini and Codex follow their documented flags and are not. `lgtm doctor` tells you either way: it asks each agent's review command for a one-word answer, then has the fix command create a file in a scratch directory and checks that it did.
+Then in any repo, `agent = "copilot"` under `[lgtm]` picks one, or set `default_agent`. The Claude and Copilot recipes are verified on the author's machine; Gemini and Codex follow their documented flags. The probe is what verifies any of them on yours: it asks the review command for a one-word answer, then has the fix command create a file in a scratch directory and checks that it did. `lgtm doctor` runs it for every agent in the file.
 
 ## Costs
 
