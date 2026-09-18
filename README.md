@@ -18,12 +18,12 @@ Most code in a branch today was written by AI, and it needs a harder review than
 
 ```sh
 go install github.com/richdapice/lgtm@latest
-cd your-repo && lgtm init        # finds your projects, writes .lgtm.toml
+cd your-repo && lgtm init        # finds your projects and your agent CLI, writes the config
 git checkout -b my-change        # ...commit your work...
 lgtm                             # review, fix, open the PR
 ```
 
-Prebuilt binaries for macOS and Linux are on the [releases page](https://github.com/richdapice/lgtm/releases/latest). Either way, it needs `git`, `gh` (logged in), and `claude` on your PATH.
+Prebuilt binaries for macOS and Linux are on the [releases page](https://github.com/richdapice/lgtm/releases/latest). Either way, it needs `git`, `gh` (logged in), and an agent CLI on your PATH: Claude Code, Copilot, Gemini, or Codex.
 
 ## What you get
 
