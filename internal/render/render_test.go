@@ -53,7 +53,7 @@ func TestDiscoverLayout(t *testing.T) {
 	if !strings.HasPrefix(strings.TrimLeft(ls[4], " "), "╰ tests") {
 		t.Fatalf("last lens row = %q", ls[4])
 	}
-	if !strings.Contains(ls[0], "manual   2m14s   ≈$0.09") {
+	if !strings.Contains(ls[0], "[manual]  2m14s   ≈$0.09") {
 		t.Fatalf("header right = %q", ls[0])
 	}
 }
@@ -76,7 +76,7 @@ func TestHeldLayout(t *testing.T) {
 	r.UpdatedAt = now.Add(-30 * time.Second)
 	out = Render(Input{Runs: []*run.Run{r}, Now: now.Add(10 * time.Minute)}, Style{Cols: 100})
 	ls = lines(out)
-	if !strings.Contains(ls[0], "4 need you   1m44s") {
+	if !strings.Contains(ls[0], "[4 need you]  1m44s") {
 		t.Fatalf("held elapsed should freeze at UpdatedAt: %q", ls[0])
 	}
 	if !strings.Contains(ls[1], "● ● ●") || !strings.Contains(ls[1], "round 3/3") || !strings.Contains(ls[1], "4 open") {
@@ -105,7 +105,7 @@ func TestCIAndIdleAndMulti(t *testing.T) {
 	hist[3].Outcome = run.Held
 	out = Render(Input{History: hist, IdleRef: "main", Now: now}, Style{Cols: 100})
 	ls = lines(out)
-	if len(ls) != 2 || !strings.Contains(ls[0], "lgtm ▸ main   idle") || !strings.HasPrefix(ls[1], " runs ▁") || !strings.Contains(ls[1], "20 today") || !strings.Contains(ls[1], "streak 16") {
+	if len(ls) != 2 || !strings.Contains(ls[0], "[lgtm][main][idle]") || !strings.HasPrefix(ls[1], "      ▁") || !strings.Contains(ls[1], "20 today") || !strings.Contains(ls[1], "streak 16") {
 		t.Fatalf("idle layout:\n%s", out)
 	}
 	// with a repo: name in the header, its last run on the second row
@@ -113,7 +113,7 @@ func TestCIAndIdleAndMulti(t *testing.T) {
 	hist[19].EndedAt = now.Add(-41 * time.Minute)
 	out = Render(Input{History: hist, IdleRef: "main", Repo: "crmaapp", RepoKey: "/r/.git", Now: now}, Style{Cols: 100})
 	ls = lines(out)
-	if !strings.Contains(ls[0], "lgtm ▸ crmaapp · main   idle") || !strings.HasPrefix(ls[1], " last ✓ sync-throttle · 3 found · 2 fixed · 41m ago      ▁") {
+	if !strings.Contains(ls[0], "[lgtm][crmaapp][main][idle]") || !strings.HasPrefix(ls[1], "      sync-throttle ✓ 3 found · 2 fixed  41m ago      ▁") {
 		t.Fatalf("idle with repo:\n%s", out)
 	}
 	if w := width(ls[1]); w > 100 {
@@ -146,10 +146,15 @@ func TestColorDoesNotChangeWidth(t *testing.T) {
 
 func TestPlanUsageInHeader(t *testing.T) {
 	plan := &PlanUsage{FiveHourPct: 37, SevenDayPct: 85, FiveHourReset: now.Add(2*time.Hour + 23*time.Minute), SevenDayReset: now.Add(76 * time.Hour)}
-	out := Render(Input{Runs: []*run.Run{discoverRun()}, Now: now, Plan: plan}, Style{Cols: 120})
+	out := Render(Input{Runs: []*run.Run{discoverRun()}, Now: now, Plan: plan}, Style{Cols: 160})
 	l := lines(out)[0]
-	if !strings.Contains(l, "≈$0.09   5h 37% ↺ 2h23m · 7d 85% ↺ 3d04h") {
+	if !strings.Contains(l, "≈$0.09   5h ▰▰▰▱▱▱▱▱▱▱ 37% ↺ 2h23m   7d ▰▰▰▰▰▰▰▰▱▱ 85% ↺ 3d04h") {
 		t.Fatalf("header = %q (width %d)", l, width(l))
+	}
+	// narrower: the reset times go before the meters do
+	l = lines(Render(Input{Runs: []*run.Run{discoverRun()}, Now: now, Plan: plan}, Style{Cols: 120}))[0]
+	if !strings.Contains(l, "5h ▰▰▰▱▱▱▱▱▱▱ 37%   7d") || strings.Contains(l, "↺") {
+		t.Fatalf("120 cols should keep meters, drop resets: %q (width %d)", l, width(l))
 	}
 }
 
@@ -206,12 +211,12 @@ func TestHeaderFitsWithRepo(t *testing.T) {
 		if width(h) > cols {
 			t.Fatalf("%d cols: header %d wide: %q", cols, width(h), h)
 		}
-		if !strings.Contains(h, "crmaapp · r2-incremental-cache → main") {
+		if !strings.Contains(h, "[crmaapp][r2-incremental-cache → main]") {
 			t.Fatalf("header = %q", h)
 		}
 	}
-	out := Render(Input{Runs: []*run.Run{r}, Repo: "crmaapp", Plan: plan, Now: now}, Style{Cols: 120})
-	if !strings.Contains(lines(out)[0], "5h 37%") {
+	out := Render(Input{Runs: []*run.Run{r}, Repo: "crmaapp", Plan: plan, Now: now}, Style{Cols: 160})
+	if !strings.Contains(lines(out)[0], "37% ↺") {
 		t.Fatalf("wide terminal should keep the plan: %q", lines(out)[0])
 	}
 }

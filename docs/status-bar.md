@@ -8,7 +8,7 @@ lgtm init --statusline      # adds it to Claude Code's status line
 
 It renders in about four milliseconds from a state file the run writes as it goes, so it costs nothing and never blocks. It shows in every Claude Code session and changes shape with the run.
 
-**Header.** Repo · branch → base, the state (`auto`, `manual`, `2 need you`, `passed`), elapsed, estimated cost, and your subscription windows when Claude Code passes them along: `5h 37% ↺ 2h23m` is how much of the 5-hour window is used and when it resets; `7d` is the week.
+**Header.** Four colored segments: `lgtm`, the repo, the branch → base, and the state. The state segment is gray while running (`auto`, `manual`), amber when findings need you, green when passed, red when failed. Then elapsed, estimated cost, and your subscription windows when Claude Code passes them along: `5h ▰▰▰▱▱▱▱▱▱▱ 37% ↺ 2h23m` is how much of the 5-hour window is used and when it resets; `7d` is the week. The meters go green, amber, red as they fill.
 
 **While reviewing.** One bar per agent call. An agent call has no progress signal, so the bar doesn't pretend to have one: a head sweeps across it while the call runs, and the elapsed time on the right is the real number.
 
@@ -35,7 +35,7 @@ gates ✓ check ─ ✓ review ─ ✓ fix ─ ✓ recheck ─ ∴ verify ─ �
 **Waiting on you** (manual mode). The count, and the exact command:
 
 ```
-  lgtm ▸ worktree-sync-throttle → main   2 need you   3m16s   ≈$0.62
+  lgtm  crmaapp  sync-throttle → main  2 need you   3m16s   ≈$0.62
     → lgtm -b worktree-sync-throttle · or /lgtm in Claude Code
 ```
 
@@ -48,9 +48,11 @@ gates ✓ check ─ ✓ review ─ ✓ fix ─ ✓ recheck ─ ∴ verify ─ �
 **Idle.** The repo and branch this session is in, then the last run in this repo (whatever branch it was on), your last twenty runs across every repo as a sparkline, today's count, and how many in a row shipped without needing you:
 
 ```
-  lgtm ▸ crmaapp · main   idle   5h 37% ↺ 2h23m · 7d 61% ↺ 3d04h
-   last ✓ sync-throttle · 3 found · 3 fixed · 41m ago      ▂▃▂▅▂▂▇▃▂▂▄▂▃▂▂▃▅▂▂▃  12 today · streak 4
+  lgtm  crmaapp  main  idle   5h ▰▰▰▱▱▱▱▱▱▱ 37% ↺ 2h23m   7d ▰▰▰▰▰▰▱▱▱▱ 61% ↺ 3d04h
+      sync-throttle ✓ 3 found · 3 fixed  41m ago      ▂▃▂▅▂▂▇▃▂▂▄▂▃▂▂▃▅▂▂▃  12 today · streak 4
 ```
+
+The sparkline is green for runs that shipped, amber for ones that needed you, red for failures.
 
 The bar follows the session's directory, which is where Claude Code was started or last moved to, not your shell's. That is why several sessions on `main` all say `main`; the repo name tells them apart, and the `last` row says what happened here most recently.
 
