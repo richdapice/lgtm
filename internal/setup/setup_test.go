@@ -235,7 +235,10 @@ func TestPromptStopsAtEOF(t *testing.T) {
 	// a blank project is walked; stdin ends immediately. Must not loop.
 	d := Detected{Projects: []Project{{Project: config.Project{Path: "."}, Kind: "xcode"}}}
 	done := make(chan config.Repo, 1)
-	go func() { r, _ := Prompt(bufio.NewReader(strings.NewReader("")), &strings.Builder{}, d, false); done <- r }()
+	go func() {
+		r, _ := Prompt(bufio.NewReader(strings.NewReader("")), &strings.Builder{}, d, false)
+		done <- r
+	}()
 	select {
 	case r := <-done:
 		if len(r.Projects) != 1 || r.Projects[0].Test != "" {
