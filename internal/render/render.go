@@ -30,35 +30,41 @@ type Style struct {
 	Cols  int
 }
 
-// seg is a filled background block: white-on-color text with a space of
-// padding either side, the powerline idiom without the arrow glyphs.
-func (s Style) seg(bg, text string) string {
-	if !s.Color {
-		return "[" + text + "]"
-	}
-	return "\033[48;5;" + bg + ";38;5;255;1m " + text + " \033[0m"
-}
-
-// meter is a ten-cell usage bar colored by how full it is.
-func meter(pct int, st Style) string {
-	n := max(min(pct/10, 10), 0)
-	col := dim
-	switch {
-	case pct >= 90:
-		col = bad
-	case pct >= 70:
-		col = warn
-	case pct > 0:
-		col = good
-	}
-	return st.c(col, strings.Repeat("▰", n)) + st.c(dim, strings.Repeat("▱", 10-n))
-}
-
 func (s Style) c(code, text string) string {
 	if !s.Color || text == "" {
 		return text
 	}
 	return "\033[" + code + "m" + text + "\033[0m"
+}
+
+// seg is a filled background block: white-on-color text with a space of
+// padding either side, the powerline idiom without the arrow glyphs.
+func (s Style) seg(bg, text string) string {
+	if !s.Color {
+		return "[" + stripCSI(text) + "]"
+	}
+	// inner resets (\033[0m) would drop the background mid-segment; re-arm
+	// the background after each one
+	on := "\033[48;5;" + bg + ";38;5;253m"
+	return on + " " + strings.ReplaceAll(text, "\033[0m", "\033[0m"+on) + " \033[0m"
+}
+
+// stripCSI is the visible text of a styled string.
+func stripCSI(s string) string {
+	var b strings.Builder
+	for i := 0; i < len(s); {
+		if s[i] == 0x1b {
+			j := i + 1
+			for j < len(s) && !(s[j] >= '@' && s[j] <= '~') {
+				j++
+			}
+			i = j + 1
+			continue
+		}
+		b.WriteByte(s[i])
+		i++
+	}
+	return b.String()
 }
 
 const (
@@ -103,14 +109,23 @@ func (p *PlanUsage) render(st Style, now time.Time, resets bool) string {
 	if p == nil {
 		return ""
 	}
+	col := func(pct int) string {
+		switch {
+		case pct >= 90:
+			return bad
+		case pct >= 70:
+			return warn
+		}
+		return dim
+	}
 	win := func(label string, pct int, reset time.Time) string {
-		s := st.c(dim, label+" ") + meter(pct, st) + st.c(dim, fmt.Sprintf(" %d%%", pct))
+		s := st.c(col(pct), fmt.Sprintf("%s %d%%", label, pct))
 		if resets && !reset.IsZero() && reset.After(now) {
 			s += st.c(dim, " ↺ "+until(reset.Sub(now)))
 		}
 		return s
 	}
-	return win("5h", p.FiveHourPct, p.FiveHourReset) + "   " + win("7d", p.SevenDayPct, p.SevenDayReset)
+	return win("5h", p.FiveHourPct, p.FiveHourReset) + st.c(dim, " · ") + win("7d", p.SevenDayPct, p.SevenDayReset)
 }
 
 // until is a compact "time from now": 42m, 2h23m, 3d04h.
@@ -151,25 +166,26 @@ func Render(in Input, st Style) string {
 	}
 }
 
-// Segment colors: the wordmark, the repo, the branch, and one for the state.
+// Segment colors. The strip is one dark block so it reads as a single label;
+// only the state segment changes color, and only when it has news.
 const (
-	bgMark   = "30"  // teal
-	bgRepo   = "24"  // deep blue
-	bgBranch = "25"  // blue
-	bgQuiet  = "238" // gray: idle, auto, manual
-	bgGood   = "28"  // green: passed
-	bgWarn   = "130" // amber: needs you
-	bgBad    = "124" // red: failed, stale
+	bgStrip = "236" // near-black: lgtm · repo · branch
+	bgQuiet = "238" // gray: idle, auto, manual
+	bgGood  = "22"  // green: passed
+	bgWarn  = "130" // amber: needs you
+	bgBad   = "88"  // red: failed, stale
 )
 
-// header is the segment strip every layout starts with: lgtm, the repo when
-// known, the ref, then the state in a color that says how it's going.
+// header is the strip every layout starts with: lgtm, the repo when known,
+// and the ref on one dark block, then the state in a color that says how
+// it's going.
 func header(in Input, ref, state, stateBg string, st Style) string {
-	h := st.seg(bgMark, "lgtm")
+	label := st.c(bold, "lgtm")
 	if in.Repo != "" {
-		h += st.seg(bgRepo, in.Repo)
+		label += st.c(dim, " · ") + in.Repo
 	}
-	return h + st.seg(bgBranch, ref) + st.seg(stateBg, state)
+	label += st.c(dim, " · ") + ref
+	return st.seg(bgStrip, label) + st.seg(stateBg, state)
 }
 
 func idle(in Input, st Style) string {
@@ -234,9 +250,10 @@ func sparkRow(h []run.Summary, today int, st Style) string {
 	for _, s := range h {
 		// min-max so the shortest run is ▁ and the longest █; a flat history
 		// sits mid-height rather than pretending to be fast
-		lvl := 3
+		// capped at ▅ so the tallest bar still leaves air under the row above
+		lvl := 2
 		if hi > lo {
-			lvl = int(float64(s.Duration-lo) / float64(hi-lo) * 7)
+			lvl = int(float64(s.Duration-lo) / float64(hi-lo) * 4)
 		}
 		ch := string([]rune(spark)[lvl])
 		switch s.Outcome {
@@ -245,7 +262,7 @@ func sparkRow(h []run.Summary, today int, st Style) string {
 		case run.Failed:
 			ch = st.c(bad, ch)
 		default:
-			ch = st.c(good, ch)
+			ch = st.c(dim, ch)
 		}
 		b.WriteString(ch)
 	}
