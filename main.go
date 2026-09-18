@@ -90,8 +90,9 @@ func main() {
 			fs := flag.NewFlagSet("demo bar", flag.ExitOnError)
 			par := fs.Bool("parallel", false, "one bar per lens, filling at different rates")
 			passes := fs.Int("passes", 1, "review rows in sequence")
+			idle := fs.Bool("idle", false, "draw only the idle frame")
 			fs.Parse(args[1:])
-			err = tui.DemoBar(ctx, tui.DemoBarOptions{Parallel: *par, Passes: *passes})
+			err = tui.DemoBar(ctx, tui.DemoBarOptions{Parallel: *par, Passes: *passes, IdleOnly: *idle})
 		} else {
 			fs := flag.NewFlagSet("demo", flag.ExitOnError)
 			auto := fs.Bool("auto", false, "the run on autopilot: no panel, nobody asked")

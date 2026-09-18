@@ -30,6 +30,30 @@ type Style struct {
 	Cols  int
 }
 
+// seg is a filled background block: white-on-color text with a space of
+// padding either side, the powerline idiom without the arrow glyphs.
+func (s Style) seg(bg, text string) string {
+	if !s.Color {
+		return "[" + text + "]"
+	}
+	return "\033[48;5;" + bg + ";38;5;255;1m " + text + " \033[0m"
+}
+
+// meter is a ten-cell usage bar colored by how full it is.
+func meter(pct int, st Style) string {
+	n := max(min(pct/10, 10), 0)
+	col := dim
+	switch {
+	case pct >= 90:
+		col = bad
+	case pct >= 70:
+		col = warn
+	case pct > 0:
+		col = good
+	}
+	return st.c(col, strings.Repeat("▰", n)) + st.c(dim, strings.Repeat("▱", 10-n))
+}
+
 func (s Style) c(code, text string) string {
 	if !s.Color || text == "" {
 		return text
@@ -75,27 +99,18 @@ type PlanUsage struct {
 
 // render shows each window as "used ↺ time-until-reset". A percentage without
 // its reset is just anxiety; the reset is what tells you whether to wait.
-func (p *PlanUsage) render(st Style, now time.Time) string {
+func (p *PlanUsage) render(st Style, now time.Time, resets bool) string {
 	if p == nil {
 		return ""
 	}
-	col := func(pct int) string {
-		switch {
-		case pct >= 90:
-			return bad
-		case pct >= 70:
-			return warn
-		}
-		return dim
-	}
 	win := func(label string, pct int, reset time.Time) string {
-		s := st.c(col(pct), fmt.Sprintf("%s %d%%", label, pct))
-		if !reset.IsZero() && reset.After(now) {
+		s := st.c(dim, label+" ") + meter(pct, st) + st.c(dim, fmt.Sprintf(" %d%%", pct))
+		if resets && !reset.IsZero() && reset.After(now) {
 			s += st.c(dim, " ↺ "+until(reset.Sub(now)))
 		}
 		return s
 	}
-	return win("5h", p.FiveHourPct, p.FiveHourReset) + st.c(dim, " · ") + win("7d", p.SevenDayPct, p.SevenDayReset)
+	return win("5h", p.FiveHourPct, p.FiveHourReset) + "   " + win("7d", p.SevenDayPct, p.SevenDayReset)
 }
 
 // until is a compact "time from now": 42m, 2h23m, 3d04h.
@@ -136,13 +151,25 @@ func Render(in Input, st Style) string {
 	}
 }
 
-// where is "repo · branch" for the header, or just the branch when the repo
-// isn't known.
-func where(in Input, ref string, st Style) string {
-	if in.Repo == "" {
-		return ref
+// Segment colors: the wordmark, the repo, the branch, and one for the state.
+const (
+	bgMark   = "30"  // teal
+	bgRepo   = "24"  // deep blue
+	bgBranch = "25"  // blue
+	bgQuiet  = "238" // gray: idle, auto, manual
+	bgGood   = "28"  // green: passed
+	bgWarn   = "130" // amber: needs you
+	bgBad    = "124" // red: failed, stale
+)
+
+// header is the segment strip every layout starts with: lgtm, the repo when
+// known, the ref, then the state in a color that says how it's going.
+func header(in Input, ref, state, stateBg string, st Style) string {
+	h := st.seg(bgMark, "lgtm")
+	if in.Repo != "" {
+		h += st.seg(bgRepo, in.Repo)
 	}
-	return st.c(bold, in.Repo) + st.c(dim, " · ") + ref
+	return h + st.seg(bgBranch, ref) + st.seg(stateBg, state)
 }
 
 func idle(in Input, st Style) string {
@@ -164,17 +191,17 @@ func idle(in Input, st Style) string {
 	if in.NoRepo {
 		state = "not a repo"
 	}
-	head := st.c(bold, "lgtm") + " ▸ " + where(in, strings.TrimPrefix(in.IdleRef, "worktree-"), st) + "   " + st.c(dim, state)
-	rows := []string{row(st, "", fit(head, in.Plan.render(st, in.Now), st), "", "lgtm")}
+	head := header(in, strings.TrimPrefix(in.IdleRef, "worktree-"), state, bgQuiet, st)
+	var left string
+	rows := []string{row(st, "", fit(head, in.Plan, st, in.Now), "", "lgtm")}
 	if len(in.History) == 0 {
 		return rows[0]
 	}
 	// second row: what happened last in this repo, then the wider picture
-	label, left := "runs", ""
 	if last != nil {
-		label, left = "last", lastRun(*last, in.Now, st)+"      "
+		left = lastRun(*last, in.Now, st) + "      "
 	}
-	rows = append(rows, row(st, st.c(dim, label), left+sparkRow(in.History, today, st), "", label))
+	rows = append(rows, row(st, "", left+sparkRow(in.History, today, st), "", ""))
 	return strings.Join(rows, "\n")
 }
 
@@ -193,8 +220,7 @@ func lastRun(h run.Summary, now time.Time, st Style) string {
 	default:
 		mark, tail = st.c(bad, "✗"), "failed"
 	}
-	return mark + " " + st.c(accent, strings.TrimPrefix(h.Branch, "worktree-")) +
-		st.c(dim, " · "+tail+" · "+ago(now.Sub(h.EndedAt)))
+	return st.c(accent, strings.TrimPrefix(h.Branch, "worktree-")) + " " + mark + st.c(dim, " "+tail+"  "+ago(now.Sub(h.EndedAt)))
 }
 
 // sparkRow is the last runs as a sparkline, today's count, and how many in a
@@ -219,7 +245,7 @@ func sparkRow(h []run.Summary, today int, st Style) string {
 		case run.Failed:
 			ch = st.c(bad, ch)
 		default:
-			ch = st.c(dim, ch)
+			ch = st.c(good, ch)
 		}
 		b.WriteString(ch)
 	}
@@ -253,29 +279,29 @@ func ago(d time.Duration) string {
 func single(r *run.Run, in Input, st Style) string {
 	now, plan := in.Now, in.Plan
 	var rows []string
-	mode := r.Mode
+	mode, bg := r.Mode, bgQuiet
 	switch r.Phase {
 	case run.Done:
-		mode = st.c(good, "passed")
+		mode, bg = "passed", bgGood
 	case run.Failed:
-		mode = st.c(bad, "failed")
+		mode, bg = "failed", bgBad
 	case run.Held:
 		n := r.Findings.NeedsYou()
-		mode = st.c(warn, fmt.Sprintf("%d need you", n))
+		mode, bg = fmt.Sprintf("%d need you", n), bgWarn
 		if n == 1 {
-			mode = st.c(warn, "1 needs you")
+			mode = "1 needs you"
 		}
 	default:
 		if !r.Alive() {
-			mode = st.c(dim, "stale")
+			mode, bg = "stale", bgBad
 		}
 	}
 	// everything left-anchored: on a wide terminal a flush-right column ends
 	// up under Claude Code's notification area and reads as a separate thing
 	branch := strings.TrimPrefix(r.Branch, "worktree-")
-	head := st.c(bold, "lgtm") + " ▸ " + where(in, st.c(accent, branch), st) + st.c(dim, " → "+r.Base) +
-		"   " + mode + "   " + st.c(dim, dur(r.Elapsed(now))) + "   " + cost(r.CostUSD, st)
-	rows = append(rows, row(st, "", fit(head, plan.render(st, now), st), "", "lgtm"))
+	head := header(in, branch+" → "+r.Base, mode, bg, st) +
+		"  " + st.c(dim, dur(r.Elapsed(now))) + "   " + cost(r.CostUSD, st)
+	rows = append(rows, row(st, "", fit(head, plan, st, now), "", "lgtm"))
 
 	// lenses while reviewing; after that the gate track tells the story
 	showLenses := r.Phase == run.Discover
@@ -396,7 +422,7 @@ func multi(runs []*run.Run, in Input, st Style) string {
 	for _, r := range runs {
 		total += r.CostUSD
 	}
-	head := st.c(bold, "lgtm") + " ▸ " + where(in, fmt.Sprintf("%d runs", len(runs)), st) + "   " + cost(total, st)
+	head := header(in, fmt.Sprintf("%d runs", len(runs)), "busy", bgQuiet, st) + "  " + cost(total, st)
 	rows := []string{row(st, "", head, "", "lgtm")}
 	for _, r := range runs {
 		name := strings.TrimPrefix(r.Branch, "worktree-")
@@ -423,14 +449,18 @@ func multi(runs []*run.Run, in Input, st Style) string {
 }
 
 // fit appends the plan windows to a header only if the row still fits the
-// terminal: a wrapped header breaks every row under it, and the windows are
-// the part you can most afford to lose.
-func fit(head, plan string, st Style) string {
-	if plan == "" {
-		return head
-	}
-	if width(head)+3+width(plan) <= st.Cols-gutter-1 {
-		return head + "   " + plan
+// terminal: a wrapped header breaks every row under it. The reset times go
+// first, then the windows altogether; they are the part you can most afford
+// to lose.
+func fit(head string, plan *PlanUsage, st Style, now time.Time) string {
+	for _, resets := range []bool{true, false} {
+		p := plan.render(st, now, resets)
+		if p == "" {
+			return head
+		}
+		if width(head)+3+width(p) <= st.Cols-gutter-1 {
+			return head + "   " + p
+		}
 	}
 	return head
 }
