@@ -93,6 +93,23 @@ type Finding struct {
 	// AutoDeclined: the fixer declined even with autopilot's mandate. Only
 	// then does autopilot stop sending it.
 	AutoDeclined bool `json:"auto_declined,omitempty"`
+	// Triage is Jev's read of the finding, when a TYPESAFE_API_KEY is set.
+	// Advisory: it pre-selects the action in manual mode and lets autopilot
+	// skip the fixer for an `ask` that is probably not real. Never a verdict.
+	Triage *Triage `json:"triage,omitempty"`
+}
+
+// Triage is one System One pass over a finding: whether it is a genuine
+// problem in the code shown, and which of the review actions fits.
+type Triage struct {
+	Real       float64 `json:"real"`       // probability the finding is a real problem, 0..1
+	Suggest    string  `json:"suggest"`    // fix | accept | dismiss
+	Confidence float64 `json:"confidence"` // how peaked the suggestion's distribution is, 0..1
+}
+
+// String is the one-line form the prompt, the panel, and `lgtm findings` show.
+func (t Triage) String() string {
+	return fmt.Sprintf("jev: %s (%.0f%% sure) · %.0f%% real", t.Suggest, t.Confidence*100, t.Real*100)
 }
 
 // Anchored reports whether the finding points at a specific line. An unanchored

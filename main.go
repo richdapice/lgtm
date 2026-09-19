@@ -25,6 +25,7 @@ import (
 	"github.com/richdapice/lgtm/internal/config"
 	"github.com/richdapice/lgtm/internal/finding"
 	"github.com/richdapice/lgtm/internal/gitx"
+	"github.com/richdapice/lgtm/internal/jev"
 	"github.com/richdapice/lgtm/internal/render"
 	"github.com/richdapice/lgtm/internal/run"
 	"github.com/richdapice/lgtm/internal/setup"
@@ -359,6 +360,9 @@ func cmdFindings(args []string) error {
 		if f.Note != "" {
 			fmt.Printf("      ↳ %s\n", f.Note)
 		}
+		if f.Triage != nil {
+			fmt.Printf("      %s\n", f.Triage)
+		}
 	}
 	return nil
 }
@@ -685,10 +689,38 @@ func cmdDoctor(ctx context.Context) error {
 			failed++
 		}
 	}
+	if !probeJev(ctx) {
+		failed++
+	}
 	if failed > 0 {
-		return fmt.Errorf("%d agent(s) failed", failed)
+		return fmt.Errorf("%d probe(s) failed", failed)
 	}
 	return nil
+}
+
+// probeJev asks Jev one trivial question, so a bad key shows up here and
+// not as an "unscored" note in the middle of a review. No key is not a
+// failure: triage is optional.
+func probeJev(ctx context.Context) bool {
+	c := jev.FromEnv()
+	if c == nil {
+		fmt.Printf("  · %-10s no TYPESAFE_API_KEY: findings arrive without Jev's opinion\n", "jev")
+		return true
+	}
+	start := time.Now()
+	resp, err := c.Ask(ctx, "the sky is blue", map[string]jev.Question{
+		"blue": {Type: "noul", Instructions: "Does the text say the sky is blue?"},
+	})
+	if err != nil {
+		fmt.Printf("  ✗ %-10s %v\n", "jev", err)
+		return false
+	}
+	if resp.Answers["blue"].Noul < 0.5 {
+		fmt.Printf("  ✗ %-10s answered %.2f to a question whose answer is yes\n", "jev", resp.Answers["blue"].Noul)
+		return false
+	}
+	fmt.Printf("  ✓ %-10s triage · %s · %s\n", "jev", resp.Model, time.Since(start).Round(100*time.Millisecond))
+	return true
 }
 
 func fatal(format string, a ...any) {

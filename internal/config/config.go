@@ -44,9 +44,25 @@ type Agent struct {
 type Repo struct {
 	Settings Settings        `toml:"lgtm"`
 	PR       PR              `toml:"pr"`
+	Triage   Triage          `toml:"triage"`
 	Lenses   map[string]Lens `toml:"lens"`
 	Projects []Project       `toml:"project"`
 }
+
+// Triage is the Jev pass over the findings. It is on whenever the machine
+// has a TYPESAFE_API_KEY; the key lives in the environment, not here,
+// because this file is committed.
+type Triage struct {
+	Enabled *bool `toml:"enabled"` // nil = on when the key is set
+	// SkipBelow is the probability of "real" under which autopilot files an
+	// `ask` finding instead of paying a fix round for it. A `block` always
+	// goes to the fixer whatever Jev thinks. 0 means autopilot never skips.
+	SkipBelow float64 `toml:"skip_below"`
+}
+
+const DefaultSkipBelow = 0.2
+
+func (t Triage) On() bool { return t.Enabled == nil || *t.Enabled }
 
 type Settings struct {
 	Mode         string `toml:"mode"`           // manual | auto
@@ -281,6 +297,12 @@ func LoadRepo(root string) (*Repo, error) {
 	}
 	if err := r.PR.validate(); err != nil {
 		return nil, err
+	}
+	if _, set := rawKeys(root, "triage", "skip_below"); !set {
+		r.Triage.SkipBelow = DefaultSkipBelow
+	}
+	if r.Triage.SkipBelow < 0 || r.Triage.SkipBelow > 1 {
+		return nil, fmt.Errorf("config: [triage] skip_below = %v; it is a probability, 0 to 1", r.Triage.SkipBelow)
 	}
 	if len(r.Settings.Passes) == 0 {
 		r.Settings.Passes = []string{""} // one pass on the agent's default model

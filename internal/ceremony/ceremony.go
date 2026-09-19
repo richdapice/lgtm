@@ -25,9 +25,11 @@ import (
 	"github.com/richdapice/lgtm/internal/finding"
 	"github.com/richdapice/lgtm/internal/gh"
 	"github.com/richdapice/lgtm/internal/gitx"
+	"github.com/richdapice/lgtm/internal/jev"
 	"github.com/richdapice/lgtm/internal/lens"
 	"github.com/richdapice/lgtm/internal/project"
 	"github.com/richdapice/lgtm/internal/run"
+	"github.com/richdapice/lgtm/internal/triage"
 )
 
 // ErrHeld is returned when the run stopped for a human. It is not a failure;
@@ -63,6 +65,7 @@ type Ceremony struct {
 	repo     *config.Repo
 	reviewer agent.Adapter
 	fixer    *agent.Adapter // nil when the agent has no fix_command
+	jev      *jev.Client    // nil when there is no TYPESAFE_API_KEY or triage is off
 	gh       gh.Client
 
 	root, common, branch, base, baseRef, mergeBase, tree string
@@ -240,6 +243,9 @@ func prepare(ctx context.Context, o Options) (*Ceremony, error) {
 	}
 	if c.dismiss, err = finding.LoadDismissList(c.root); err != nil {
 		return nil, err
+	}
+	if c.repo.Triage.On() {
+		c.jev = jev.FromEnv()
 	}
 
 	// resume a held run on the same tree rather than paying for discover again
@@ -483,7 +489,45 @@ func (c *Ceremony) discover(ctx context.Context) error {
 	if c.run.Findings.Discovered() == 0 {
 		c.println("  0 found. Suspicious.")
 	}
+	c.triage(ctx)
 	return nil
+}
+
+// triage is Jev's pass over the closed set: a probability that each finding
+// is real and a suggested action. It costs a fraction of a cent and a
+// second or so, and a failure costs nothing — the findings just arrive
+// without an opinion attached.
+func (c *Ceremony) triage(ctx context.Context) {
+	open := c.actionable()
+	if c.jev == nil || len(open) == 0 {
+		return
+	}
+	c.step("review", fmt.Sprintf("jev reading %d finding(s)", len(open)))
+	start := time.Now()
+	res, err := triage.Run(ctx, c.jev, open, c.files, c.intent)
+	c.addCost(res.CostUSD)
+	for _, f := range open {
+		if f.Triage != nil {
+			if p := c.run.Findings.ByID(f.ID); p != nil {
+				p.Triage = f.Triage
+			}
+		}
+	}
+	c.log("call %-12s $%.4f  %d/%d scored  %s  %s", "triage", res.CostUSD, res.Scored, res.Asked, c.jev.Model, time.Since(start).Round(time.Millisecond))
+	if err != nil {
+		c.log("triage: %v", err)
+		c.println("  jev triage failed (%v); findings are unscored", err)
+	}
+	c.save()
+}
+
+// skipByTriage is autopilot declining to pay a fix round for an `ask` that
+// Jev is fairly sure is not a real problem. A `block` always goes to the
+// fixer whatever Jev thinks: the stakes outrank the opinion.
+func (c *Ceremony) skipByTriage(f finding.Finding) bool {
+	t := f.Triage
+	th := c.repo.Triage.SkipBelow
+	return t != nil && th > 0 && f.Severity == finding.Ask && t.Real < th && t.Suggest != "fix"
 }
 
 // comment posts the configured PR comment, placeholders expanded. Best-effort.
@@ -557,10 +601,26 @@ func (c *Ceremony) rounds(ctx context.Context) error {
 			// comes back unfixed is filed, not held
 			// a manual-mode decline was "needs a decision"; autopilot *is* the
 			// decision, so it gets one more try with the mandate
+			skipped := 0
 			for _, f := range actionable {
-				if !f.AutoDeclined {
-					toFix = append(toFix, f)
+				if f.AutoDeclined {
+					continue
 				}
+				// filed, not accepted, so it lands in the PR body's list
+				// and a human sees what was waved through and why
+				if c.skipByTriage(f) {
+					if p := c.run.Findings.ByID(f.ID); p != nil {
+						p.State = finding.Filed
+						p.Note = "autopilot: not sent to the fixer · " + f.Triage.String()
+					}
+					skipped++
+					continue
+				}
+				toFix = append(toFix, f)
+			}
+			if skipped > 0 {
+				c.save()
+				c.println("  jev waved through %d ask finding(s) as probably not real; they're in the PR body", skipped)
 			}
 			if len(toFix) == 0 {
 				break

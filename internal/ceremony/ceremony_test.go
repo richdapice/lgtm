@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/richdapice/lgtm/internal/config"
+	"github.com/richdapice/lgtm/internal/finding"
 	"github.com/richdapice/lgtm/internal/gitx"
 	"github.com/richdapice/lgtm/internal/project"
 )
@@ -109,5 +111,30 @@ func TestEnvironmentFailureIsAnchored(t *testing.T) {
 	}
 	if environmentFailure([]project.Result{{OK: true, Output: "command not found"}}) != "" {
 		t.Error("a passing check is never an environment failure")
+	}
+}
+
+func TestSkipByTriageOnlyWavesThroughUnlikelyAsks(t *testing.T) {
+	c := &Ceremony{repo: &config.Repo{Triage: config.Triage{SkipBelow: 0.2}}}
+	low := &finding.Triage{Real: 0.1, Suggest: "accept", Confidence: 0.9}
+	cases := []struct {
+		name string
+		f    finding.Finding
+		want bool
+	}{
+		{"unlikely ask", finding.Finding{Severity: finding.Ask, Triage: low}, true},
+		{"unlikely block still goes to the fixer", finding.Finding{Severity: finding.Block, Triage: low}, false},
+		{"likely ask", finding.Finding{Severity: finding.Ask, Triage: &finding.Triage{Real: 0.6, Suggest: "accept"}}, false},
+		{"jev says fix, however unlikely", finding.Finding{Severity: finding.Ask, Triage: &finding.Triage{Real: 0.1, Suggest: "fix"}}, false},
+		{"unscored", finding.Finding{Severity: finding.Ask}, false},
+	}
+	for _, tc := range cases {
+		if got := c.skipByTriage(tc.f); got != tc.want {
+			t.Errorf("%s: got %v", tc.name, got)
+		}
+	}
+	c.repo.Triage.SkipBelow = 0
+	if c.skipByTriage(cases[0].f) {
+		t.Error("skip_below = 0 must turn skipping off")
 	}
 }
