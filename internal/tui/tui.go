@@ -248,13 +248,14 @@ func (m *model) key(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // preselect puts the action cursor where the finding under the cursor
 // suggests: the decision already made for it, else Jev's suggestion, else
-// Fix. The user still presses Enter; nothing is decided for them. Dismiss
+// wherever the user left it. The user still presses Enter; nothing is
+// decided for them. Dismiss
 // is never pre-selected — it is the one action that is permanent and
 // committed, so it stays something you arrow over to; a dismiss suggestion
 // lands on Accept, and the line under the finding still says dismiss.
 func (m *model) preselect() {
-	m.action = 0
 	if m.cursor >= len(m.open) {
+		m.action = 0
 		return
 	}
 	f := m.open[m.cursor]

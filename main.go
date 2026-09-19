@@ -499,9 +499,17 @@ func initAgent(ctx context.Context, in *bufio.Reader, yes bool, pick string, tri
 	// every recipe on the machine goes in the file, so switching later is a
 	// one-word edit; only the pick is probed
 	g := &config.Global{DefaultAgent: name, Agents: found, Triage: triage}
+	// an opt-in already on the machine survives --agent
+	if !g.Triage && config.GlobalExists() {
+		prev, err := config.LoadGlobal()
+		if err != nil {
+			return err
+		}
+		g.Triage = prev.Triage
+	}
 	// the opt-in is asked only when a key is already here: someone without
 	// one has nothing to decide, and the docs say how to come back to it
-	if !triage && !yes && os.Getenv("TYPESAFE_API_KEY") != "" {
+	if !g.Triage && !yes && os.Getenv("TYPESAFE_API_KEY") != "" {
 		g.Triage = setup.PromptTriage(in, os.Stdout)
 	}
 	if err := config.WriteGlobal(g); err != nil {

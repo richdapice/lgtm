@@ -60,7 +60,7 @@ func Run(ctx context.Context, c *jev.Client, fs []finding.Finding, files []diffp
 	var res Result
 	var picked []int
 	for i := range fs {
-		if fs[i].Anchored() {
+		if fs[i].Anchored() && hunk(files, fs[i].Path, fs[i].Line) != "" {
 			picked = append(picked, i)
 		} else {
 			res.Unanchored++

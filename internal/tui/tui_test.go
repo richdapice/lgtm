@@ -53,8 +53,8 @@ func TestPreselectFollowsJev(t *testing.T) {
 	}
 	m.cursor = 1
 	m.preselect()
-	if actions[m.action].d != ceremony.Fix {
-		t.Fatalf("unscored finding should default to Fix, got %d", m.action)
+	if actions[m.action].d != ceremony.Accept {
+		t.Fatalf("unscored finding should keep the user's selection, got %d", m.action)
 	}
 	m.marks["c"] = ceremony.Dismiss
 	m.cursor = 2

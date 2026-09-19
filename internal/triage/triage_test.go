@@ -116,11 +116,11 @@ func TestRunScoresInPlaceAndBatches(t *testing.T) {
 
 	fs := make([]finding.Finding, Batch+2)
 	for i := range fs {
-		fs[i] = finding.Finding{ID: string(rune('a' + i)), Path: "x.go", Line: 1, Rule: "r", Body: "b", Severity: finding.Ask}
+		fs[i] = finding.Finding{ID: string(rune('a' + i)), Path: "x.go", Line: 4, Rule: "r", Body: "b", Severity: finding.Ask}
 	}
 	fs[3].Line = 0 // about the change as a whole: nothing to show Jev
 	c := &jev.Client{Key: "k", BaseURL: srv.URL, Model: "m"}
-	res, err := Run(context.Background(), c, fs, nil, "")
+	res, err := Run(context.Background(), c, fs, files(t), "")
 	if err != nil {
 		t.Fatal(err)
 	}
