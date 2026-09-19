@@ -39,7 +39,7 @@
 | **Dismiss** | never show this again (committed to `.lgtm/dismissed.toml`) |
 | **Skip** | not now; it stays open and the PR body says so |
 
-With a `TYPESAFE_API_KEY` set, a line under the finding says what Jev makes of it (`jev: accept (91% sure) · 14% real`) and the action cursor starts on its suggestion. See [triage](configuration.md#triage).
+With [triage](configuration.md#triage) on, a line under the finding says what Jev makes of it (`jev: accept (91% sure) · 14% real`) and the action cursor starts on its suggestion.
 
 Each finding has a severity: `block` must be fixed, `ask` is your call, `file` is worth writing down but never stops anything. If the fixer declines something because it needs a design decision, its reason stays on the finding, and you can answer it: `lgtm decide 0fe5 fix -m "crop the video for phones"`.
 

@@ -244,7 +244,9 @@ func prepare(ctx context.Context, o Options) (*Ceremony, error) {
 	if c.dismiss, err = finding.LoadDismissList(c.root); err != nil {
 		return nil, err
 	}
-	if c.repo.Triage.On() {
+	// both halves have to say yes: the machine opted in (its data leaves)
+	// and the repo didn't opt out
+	if c.global.Triage && c.repo.Triage.On() {
 		c.jev = jev.FromEnv()
 	}
 

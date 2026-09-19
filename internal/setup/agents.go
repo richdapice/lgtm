@@ -68,3 +68,20 @@ func PromptAgent(in *bufio.Reader, out io.Writer, found []config.Agent, yes bool
 		}
 	}
 }
+
+// PromptTriage is the one-time opt-in to send findings to Jev. It is asked
+// only when a TYPESAFE_API_KEY is already in the environment, and the
+// default is no: a key can be there for other tools, and saying yes means
+// diff hunks and commit messages leave the machine for every repo reviewed.
+func PromptTriage(in *bufio.Reader, out io.Writer) bool {
+	fmt.Fprintln(out, "\nTYPESAFE_API_KEY is set. Jev can give each finding a second opinion:")
+	fmt.Fprintln(out, "how likely it is real, and what to do about it. Diff hunks and commit messages")
+	fmt.Fprintln(out, "go to api.typesafe.ai for every repo you review.")
+	fmt.Fprint(out, "turn that on? [y/N]: ")
+	line, _ := in.ReadString('\n')
+	switch strings.ToLower(strings.TrimSpace(line)) {
+	case "y", "yes":
+		return true
+	}
+	return false
+}

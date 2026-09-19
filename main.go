@@ -163,6 +163,7 @@ SETUP
   lgtm init [-y]               detect your projects, write .lgtm.toml
     --statusline               add the live bar to Claude Code's status line
     --skill                    install the /lgtm skill for Claude Code
+    --triage                   send findings to Jev for a second opinion (needs TYPESAFE_API_KEY)
   lgtm doctor                  check each configured agent answers
 
 SEE IT
@@ -410,6 +411,7 @@ func cmdInit(ctx context.Context, args []string) error {
 	bar := fs.Bool("statusline", false, "add lgtm to Claude Code's status bar (~/.claude/settings.json)")
 	sk := fs.Bool("skill", false, "install the /lgtm skill for Claude Code (~/.claude/skills/lgtm)")
 	agentPick := fs.String("agent", "", "which agent CLI reviews and fixes (claude, copilot, gemini, codex); asked when unset")
+	triage := fs.Bool("triage", false, "send findings to Jev (TypeSafe) for a second opinion; needs TYPESAFE_API_KEY")
 	fs.Parse(args)
 	cwd, _ := os.Getwd()
 	root, err := gitx.Root(ctx, cwd)
@@ -436,7 +438,7 @@ func cmdInit(ctx context.Context, args []string) error {
 		return err
 	}
 	fmt.Printf("\nwrote %s · %d project(s) · autopilot · 3 fix rounds\n", config.RepoFile, len(r.Projects))
-	if err := initAgent(ctx, in, *yes, *agentPick); err != nil {
+	if err := initAgent(ctx, in, *yes, *agentPick, *triage); err != nil {
 		return err
 	}
 	if *bar {
@@ -470,13 +472,23 @@ func cmdInit(ctx context.Context, args []string) error {
 // Asked once, the first time, or whenever --agent is given; the answer is
 // probed on the spot so a recipe that doesn't work here is found now, not
 // mid-run.
-func initAgent(ctx context.Context, in *bufio.Reader, yes bool, pick string) error {
+func initAgent(ctx context.Context, in *bufio.Reader, yes bool, pick string, triage bool) error {
 	if config.GlobalExists() && pick == "" {
 		g, err := config.LoadGlobal()
 		if err != nil {
 			return err
 		}
 		fmt.Printf("agent: %s (%s; lgtm init --agent NAME to change)\n", g.DefaultAgent, config.GlobalPath())
+		if triage && !g.Triage {
+			g.Triage = true
+			if err := config.WriteGlobal(g); err != nil {
+				return err
+			}
+			fmt.Println("triage: on")
+			if !probeJev(ctx, g) {
+				return errors.New("jev didn't pass the probe; check TYPESAFE_API_KEY and run lgtm doctor")
+			}
+		}
 		return nil
 	}
 	found := setup.DetectAgents()
@@ -486,7 +498,12 @@ func initAgent(ctx context.Context, in *bufio.Reader, yes bool, pick string) err
 	}
 	// every recipe on the machine goes in the file, so switching later is a
 	// one-word edit; only the pick is probed
-	g := &config.Global{DefaultAgent: name, Agents: found}
+	g := &config.Global{DefaultAgent: name, Agents: found, Triage: triage}
+	// the opt-in is asked only when a key is already here: someone without
+	// one has nothing to decide, and the docs say how to come back to it
+	if !triage && !yes && os.Getenv("TYPESAFE_API_KEY") != "" {
+		g.Triage = setup.PromptTriage(in, os.Stdout)
+	}
 	if err := config.WriteGlobal(g); err != nil {
 		return err
 	}
@@ -494,6 +511,9 @@ func initAgent(ctx context.Context, in *bufio.Reader, yes bool, pick string) err
 	a, _ := g.Agent(name)
 	if !probe(ctx, a) {
 		return fmt.Errorf("%s didn't pass the probe; fix its setup and run lgtm doctor", name)
+	}
+	if g.Triage && !probeJev(ctx, g) {
+		return errors.New("jev didn't pass the probe; check TYPESAFE_API_KEY and run lgtm doctor")
 	}
 	return nil
 }
@@ -689,7 +709,7 @@ func cmdDoctor(ctx context.Context) error {
 			failed++
 		}
 	}
-	if !probeJev(ctx) {
+	if !probeJev(ctx, g) {
 		failed++
 	}
 	if failed > 0 {
@@ -699,13 +719,20 @@ func cmdDoctor(ctx context.Context) error {
 }
 
 // probeJev asks Jev one trivial question, so a bad key shows up here and
-// not as an "unscored" note in the middle of a review. No key is not a
-// failure: triage is optional.
-func probeJev(ctx context.Context) bool {
+// not as an "unscored" note in the middle of a review. Not opted in, or no
+// key, is not a failure: triage is optional.
+func probeJev(ctx context.Context, g *config.Global) bool {
 	c := jev.FromEnv()
-	if c == nil {
-		fmt.Printf("  · %-10s no TYPESAFE_API_KEY: findings arrive without Jev's opinion\n", "jev")
+	switch {
+	case !g.Triage && c == nil:
+		fmt.Printf("  · %-10s off (lgtm init --triage, with a TYPESAFE_API_KEY, turns it on)\n", "jev")
 		return true
+	case !g.Triage:
+		fmt.Printf("  · %-10s off; TYPESAFE_API_KEY is set but findings stay on this machine until lgtm init --triage\n", "jev")
+		return true
+	case c == nil:
+		fmt.Printf("  ✗ %-10s triage is on but there is no TYPESAFE_API_KEY in the environment\n", "jev")
+		return false
 	}
 	start := time.Now()
 	resp, err := c.Ask(ctx, "the sky is blue", map[string]jev.Question{

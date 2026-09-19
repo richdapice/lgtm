@@ -21,6 +21,11 @@ import (
 type Global struct {
 	DefaultAgent string  `toml:"default_agent"`
 	Agents       []Agent `toml:"agent,omitempty"`
+	// Triage is the opt-in for sending findings to Jev. A TYPESAFE_API_KEY
+	// in the environment is not consent on its own: the key may be there
+	// for other tools, and triage ships diff hunks and commit messages
+	// off-machine for every repo reviewed. `lgtm init --triage` sets it.
+	Triage bool `toml:"triage"`
 }
 
 // Agent is a CLI that reads a prompt on stdin and answers on stdout. Schema says
@@ -49,11 +54,12 @@ type Repo struct {
 	Projects []Project       `toml:"project"`
 }
 
-// Triage is the Jev pass over the findings. It is on whenever the machine
-// has a TYPESAFE_API_KEY; the key lives in the environment, not here,
-// because this file is committed.
+// Triage is the Jev pass over the findings. It runs when the machine has
+// opted in (Global.Triage) and has a TYPESAFE_API_KEY; the key lives in the
+// environment, not here, because this file is committed. A repo can only
+// turn it off, never on for a machine that hasn't.
 type Triage struct {
-	Enabled *bool `toml:"enabled"` // nil = on when the key is set
+	Enabled *bool `toml:"enabled"` // nil = on when the machine opted in
 	// SkipBelow is the probability of "real" under which autopilot files an
 	// `ask` finding instead of paying a fix round for it. A `block` always
 	// goes to the fixer whatever Jev thinks. 0 means autopilot never skips.
@@ -250,6 +256,10 @@ func WriteGlobal(g *Global) error {
 # command (reads, never runs) and a fix_command (edits, never runs). Any CLI
 # that takes a prompt on stdin and answers on stdout can be added the same
 # way; schema = "native" only for CLIs that accept --json-schema.
+#
+# triage = true sends each finding to Jev (TypeSafe) for a second opinion,
+# using TYPESAFE_API_KEY from the environment. Diff hunks and commit
+# messages leave this machine when it is on. lgtm init --triage sets it.
 #
 # lgtm doctor checks every agent here.
 

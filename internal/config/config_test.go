@@ -191,3 +191,22 @@ func TestTriageDefaultsAndBounds(t *testing.T) {
 		t.Fatal("skip_below above 1 must be rejected")
 	}
 }
+
+func TestGlobalTriageIsOffUntilWritten(t *testing.T) {
+	t.Setenv("LGTM_CONFIG", filepath.Join(t.TempDir(), "config.toml"))
+	g, err := LoadGlobal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g.Triage {
+		t.Fatal("triage must be off by default")
+	}
+	g.Triage = true
+	if err := WriteGlobal(g); err != nil {
+		t.Fatal(err)
+	}
+	g, err = LoadGlobal()
+	if err != nil || !g.Triage {
+		t.Fatalf("triage did not round-trip: %+v %v", g, err)
+	}
+}

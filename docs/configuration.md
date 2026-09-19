@@ -103,14 +103,16 @@ The comment is posted once the run is through, only if you set it. Placeholders:
 
 ```toml
 [triage]
-enabled = true           # false turns it off even with a key present
+enabled = true           # false turns it off for this repo, whatever the machine says
 skip_below = 0.2         # autopilot files an `ask` under this probability of being real
                          # instead of paying a fix round; 0 = always fix
 ```
 
-With a `TYPESAFE_API_KEY` in the environment, every finding that needs a decision — a `block` or `ask` pointing at a line — gets a second opinion from [Jev](https://docs.typesafe.ai), TypeSafe's System One model: a probability that it's a real problem in the code it points at, and a suggested action. A `file` finding never needs one, and a finding about the change as a whole shows no code to judge, so those go without. It's one request for the whole set, a fraction of a cent, about a second. The key stays in the environment; this file is committed.
+Triage is off until you opt in on the machine: `lgtm init --triage`, which sets `triage = true` in `~/.config/lgtm/config.toml` and probes the key. The first `lgtm init` on a machine asks, when a key is already in the environment. Once on, every finding that needs a decision — a `block` or `ask` pointing at a line — gets a second opinion from [Jev](https://docs.typesafe.ai), TypeSafe's System One model: a probability that it's a real problem in the code it points at, and a suggested action. A `file` finding never needs one, and a finding about the change as a whole shows no code to judge, so those go without. It's one request for the whole set, a fraction of a cent, about a second. The key stays in the environment; this file is committed.
 
-What it does with the opinion is deliberately small. In manual mode the panel pre-selects Jev's suggestion and shows the numbers under the finding; you still press Enter. In autopilot, an `ask` that Jev puts under `skip_below` is filed with the reason instead of sent to the fixer, and shows up in the PR body's list, so a person still sees it. A `block` always goes to the fixer, whatever Jev thinks. Without a key nothing changes.
+The two switches are deliberate: a key in the environment is not consent, because it can be there for other tools, and turning triage on means diff hunks and commit messages leave the machine for every repo you review. The machine opts in; a repo can only opt out.
+
+What it does with the opinion is deliberately small. In manual mode the panel pre-selects Jev's suggestion and shows the numbers under the finding; you still press Enter. In autopilot, an `ask` that Jev puts under `skip_below` is filed with the reason instead of sent to the fixer, and shows up in the PR body's list, so a person still sees it. A `block` always goes to the fixer, whatever Jev thinks. Without the opt-in nothing changes.
 
 ### Agents
 
