@@ -6,12 +6,21 @@
 # skipped and reported as skipped — never counted as a pass.
 #
 # [lens.<name>] model = "haiku" | "sonnet" | "opus" overrides the agent default.
+# Add a lens of your own: [lens.perf] prompt = "what it should look for".
 
 [lgtm]
   mode = "auto"
   max_fix_rounds = 3
   dispatch = "batch"
   max_budget_usd = 0.0
+
+[pr]
+  on_open = "eyes"
+  on_green = "+1"
+  comment = ""
+
+[triage]
+  skip_below = 0.2
 
 [[project]]
   path = "."
