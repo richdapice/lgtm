@@ -44,6 +44,7 @@ func TestPreselectFollowsJev(t *testing.T) {
 		{ID: "a", Triage: &finding.Triage{Suggest: "accept"}},
 		{ID: "b"},
 		{ID: "c", Triage: &finding.Triage{Suggest: "fix"}},
+		{ID: "d", Triage: &finding.Triage{Suggest: "dismiss"}},
 	}
 	m.cursor = 0
 	m.preselect()
@@ -60,6 +61,11 @@ func TestPreselectFollowsJev(t *testing.T) {
 	m.preselect()
 	if actions[m.action].d != ceremony.Dismiss {
 		t.Fatalf("a decision already made wins over jev, got %d", m.action)
+	}
+	m.cursor = 3
+	m.preselect()
+	if actions[m.action].d != ceremony.Accept {
+		t.Fatalf("dismiss is permanent and must never be pre-selected, got %d", m.action)
 	}
 	m.canFix = false
 	m.cursor = 1

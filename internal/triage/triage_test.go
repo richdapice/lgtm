@@ -66,11 +66,15 @@ func TestBuildTwoQuestionsPerFindingWithContext(t *testing.T) {
 
 func TestDecodeNeedsBothAnswers(t *testing.T) {
 	resp := jev.Response{Answers: map[string]jev.Answer{
-		"real_0":   {Type: "noul", Noul: 0.12},
+		"real_0":   {Type: "noul", Noul: p(0.12)},
 		"action_0": {Type: "choice", Choice: "accept", Confidence: 0.8},
-		"real_1":   {Type: "noul", Noul: 0.9},
+		"real_1":   {Type: "noul", Noul: p(0.9)},
 		"action_2": {Type: "choice", Choice: "maybe", Confidence: 0.5},
-		"real_2":   {Type: "noul", Noul: 0.5},
+		"real_2":   {Type: "noul", Noul: p(0.5)},
+		"real_3":   {Type: "noul"},
+		"action_3": {Type: "choice", Choice: "accept", Confidence: 0.9},
+		"real_4":   {Type: "noul", Noul: p(1.5)},
+		"action_4": {Type: "choice", Choice: "accept", Confidence: 0.9},
 	}}
 	tr, ok := Decode(resp, 0)
 	if !ok || tr.Real != 0.12 || tr.Suggest != "accept" || tr.Confidence != 0.8 {
@@ -82,7 +86,15 @@ func TestDecodeNeedsBothAnswers(t *testing.T) {
 	if _, ok := Decode(resp, 2); ok {
 		t.Fatal("finding 2 has an unknown choice; must not decode")
 	}
+	if _, ok := Decode(resp, 3); ok {
+		t.Fatal("finding 3 has no probability; it must not read as zero")
+	}
+	if _, ok := Decode(resp, 4); ok {
+		t.Fatal("finding 4 has a probability above 1; must not decode")
+	}
 }
+
+func p(v float64) *float64 { return &v }
 
 func TestRunScoresInPlaceAndBatches(t *testing.T) {
 	requests := 0
@@ -95,26 +107,33 @@ func TestRunScoresInPlaceAndBatches(t *testing.T) {
 		json.NewDecoder(r.Body).Decode(&req)
 		answers := map[string]jev.Answer{}
 		for i := range req.State.Findings {
-			answers[realKey(i)] = jev.Answer{Type: "noul", Noul: 0.05}
+			answers[realKey(i)] = jev.Answer{Type: "noul", Noul: p(0.05)}
 			answers[actionKey(i)] = jev.Answer{Type: "choice", Choice: "dismiss", Confidence: 0.95}
 		}
 		json.NewEncoder(w).Encode(map[string]any{"model": "m", "answers": answers, "usage": map[string]int{"input_tokens": 100}})
 	}))
 	defer srv.Close()
 
-	fs := make([]finding.Finding, Batch+1)
+	fs := make([]finding.Finding, Batch+2)
 	for i := range fs {
-		fs[i] = finding.Finding{ID: string(rune('a' + i)), Path: "x.go", Rule: "r", Body: "b", Severity: finding.Ask}
+		fs[i] = finding.Finding{ID: string(rune('a' + i)), Path: "x.go", Line: 1, Rule: "r", Body: "b", Severity: finding.Ask}
 	}
+	fs[3].Line = 0 // about the change as a whole: nothing to show Jev
 	c := &jev.Client{Key: "k", BaseURL: srv.URL, Model: "m"}
 	res, err := Run(context.Background(), c, fs, nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if requests != 2 || res.Asked != Batch+1 || res.Scored != Batch+1 {
-		t.Fatalf("requests=%d asked=%d scored=%d", requests, res.Asked, res.Scored)
+	if requests != 2 || res.Asked != Batch+1 || res.Scored != Batch+1 || res.Unanchored != 1 {
+		t.Fatalf("requests=%d asked=%d scored=%d unanchored=%d", requests, res.Asked, res.Scored, res.Unanchored)
 	}
-	for _, f := range fs {
+	for i, f := range fs {
+		if i == 3 {
+			if f.Triage != nil {
+				t.Fatalf("unanchored finding must stay unscored: %+v", f.Triage)
+			}
+			continue
+		}
 		if f.Triage == nil || f.Triage.Suggest != "dismiss" || f.Triage.Real != 0.05 {
 			t.Fatalf("finding %s: %+v", f.ID, f.Triage)
 		}

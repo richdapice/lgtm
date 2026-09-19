@@ -513,10 +513,10 @@ func (c *Ceremony) triage(ctx context.Context) {
 			}
 		}
 	}
-	c.log("call %-12s $%.4f  %d/%d scored  %s  %s", "triage", res.CostUSD, res.Scored, res.Asked, c.jev.Model, time.Since(start).Round(time.Millisecond))
+	c.log("call %-12s $%.4f  %d/%d scored, %d unanchored  %s  %s", "triage", res.CostUSD, res.Scored, res.Asked, res.Unanchored, c.jev.Model, time.Since(start).Round(time.Millisecond))
 	if err != nil {
 		c.log("triage: %v", err)
-		c.println("  jev triage failed (%v); findings are unscored", err)
+		c.println("  jev triage failed (%v); %d of %d finding(s) scored", err, res.Scored, res.Asked)
 	}
 	c.save()
 }

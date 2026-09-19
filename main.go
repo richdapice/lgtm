@@ -715,8 +715,13 @@ func probeJev(ctx context.Context) bool {
 		fmt.Printf("  ✗ %-10s %v\n", "jev", err)
 		return false
 	}
-	if resp.Answers["blue"].Noul < 0.5 {
-		fmt.Printf("  ✗ %-10s answered %.2f to a question whose answer is yes\n", "jev", resp.Answers["blue"].Noul)
+	p := resp.Answers["blue"].Noul
+	if p == nil {
+		fmt.Printf("  ✗ %-10s answered without a probability: %+v\n", "jev", resp.Answers["blue"])
+		return false
+	}
+	if *p < 0.5 {
+		fmt.Printf("  ✗ %-10s answered %.2f to a question whose answer is yes\n", "jev", *p)
 		return false
 	}
 	fmt.Printf("  ✓ %-10s triage · %s · %s\n", "jev", resp.Model, time.Since(start).Round(100*time.Millisecond))

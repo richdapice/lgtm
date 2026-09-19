@@ -108,7 +108,7 @@ skip_below = 0.2         # autopilot files an `ask` under this probability of be
                          # instead of paying a fix round; 0 = always fix
 ```
 
-With a `TYPESAFE_API_KEY` in the environment, every finding gets a second opinion from [Jev](https://docs.typesafe.ai), TypeSafe's System One model: a probability that it's a real problem in the code it points at, and a suggested action. It's one request for the whole set, a fraction of a cent, about a second. The key stays in the environment; this file is committed.
+With a `TYPESAFE_API_KEY` in the environment, every finding that needs a decision — a `block` or `ask` pointing at a line — gets a second opinion from [Jev](https://docs.typesafe.ai), TypeSafe's System One model: a probability that it's a real problem in the code it points at, and a suggested action. A `file` finding never needs one, and a finding about the change as a whole shows no code to judge, so those go without. It's one request for the whole set, a fraction of a cent, about a second. The key stays in the environment; this file is committed.
 
 What it does with the opinion is deliberately small. In manual mode the panel pre-selects Jev's suggestion and shows the numbers under the finding; you still press Enter. In autopilot, an `ask` that Jev puts under `skip_below` is filed with the reason instead of sent to the fixer, and shows up in the PR body's list, so a person still sees it. A `block` always goes to the fixer, whatever Jev thinks. Without a key nothing changes.
 

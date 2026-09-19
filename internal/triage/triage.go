@@ -45,22 +45,37 @@ type state struct {
 
 // Result is the per-request accounting the ceremony logs.
 type Result struct {
-	Asked   int
-	Scored  int
-	CostUSD float64
+	Asked      int
+	Scored     int
+	Unanchored int // not sent: nothing to show Jev
+	CostUSD    float64
 }
 
 // Run fills f.Triage on each finding it can score and leaves the rest alone.
-// Findings are mutated in place through the slice. An error from one batch
-// stops the run; what was scored before it stays scored.
+// Findings are mutated in place through the slice. Unanchored findings are
+// not sent: the questions are about the code shown, and a finding about the
+// change as a whole shows none. An error from one batch stops the run; what
+// was scored before it stays scored.
 func Run(ctx context.Context, c *jev.Client, fs []finding.Finding, files []diffparse.FileDiff, intent string) (Result, error) {
 	var res Result
-	for lo := 0; lo < len(fs); lo += Batch {
-		hi := lo + Batch
-		if hi > len(fs) {
-			hi = len(fs)
+	var picked []int
+	for i := range fs {
+		if fs[i].Anchored() {
+			picked = append(picked, i)
+		} else {
+			res.Unanchored++
 		}
-		batch := fs[lo:hi]
+	}
+	for lo := 0; lo < len(picked); lo += Batch {
+		hi := lo + Batch
+		if hi > len(picked) {
+			hi = len(picked)
+		}
+		ids := picked[lo:hi]
+		batch := make([]finding.Finding, len(ids))
+		for j, i := range ids {
+			batch[j] = fs[i]
+		}
 		st, qs := Build(batch, files, intent)
 		resp, err := c.Ask(ctx, st, qs)
 		res.Asked += len(batch)
@@ -68,9 +83,9 @@ func Run(ctx context.Context, c *jev.Client, fs []finding.Finding, files []diffp
 		if err != nil {
 			return res, err
 		}
-		for i := range batch {
-			if t, ok := Decode(resp, i); ok {
-				batch[i].Triage = &t
+		for j, i := range ids {
+			if t, ok := Decode(resp, j); ok {
+				fs[i].Triage = &t
 				res.Scored++
 			}
 		}
@@ -115,10 +130,15 @@ func Build(fs []finding.Finding, files []diffparse.FileDiff, intent string) (any
 
 // Decode reads the two answers for finding i out of a response. False when
 // either is missing or malformed, so a partial response scores what it can.
+// A missing or out-of-range probability is malformed: it must not read as
+// zero, which every skip threshold is above.
 func Decode(resp jev.Response, i int) (finding.Triage, bool) {
 	real, ok1 := resp.Answers[realKey(i)]
 	act, ok2 := resp.Answers[actionKey(i)]
 	if !ok1 || !ok2 || real.Type != "noul" || act.Type != "choice" {
+		return finding.Triage{}, false
+	}
+	if real.Noul == nil || *real.Noul < 0 || *real.Noul > 1 {
 		return finding.Triage{}, false
 	}
 	switch act.Choice {
@@ -126,7 +146,7 @@ func Decode(resp jev.Response, i int) (finding.Triage, bool) {
 	default:
 		return finding.Triage{}, false
 	}
-	return finding.Triage{Real: real.Noul, Suggest: act.Choice, Confidence: act.Confidence}, true
+	return finding.Triage{Real: *real.Noul, Suggest: act.Choice, Confidence: act.Confidence}, true
 }
 
 func realKey(i int) string   { return fmt.Sprintf("real_%d", i) }

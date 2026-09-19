@@ -248,7 +248,10 @@ func (m *model) key(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // preselect puts the action cursor where the finding under the cursor
 // suggests: the decision already made for it, else Jev's suggestion, else
-// Fix. The user still presses Enter; nothing is decided for them.
+// Fix. The user still presses Enter; nothing is decided for them. Dismiss
+// is never pre-selected — it is the one action that is permanent and
+// committed, so it stays something you arrow over to; a dismiss suggestion
+// lands on Accept, and the line under the finding still says dismiss.
 func (m *model) preselect() {
 	m.action = 0
 	if m.cursor >= len(m.open) {
@@ -259,6 +262,9 @@ func (m *model) preselect() {
 		m.action = actionIndex(d)
 	} else if f.Triage != nil {
 		if d, ok := ceremony.ParseDecision(f.Triage.Suggest); ok {
+			if d == ceremony.Dismiss {
+				d = ceremony.Accept
+			}
 			m.action = actionIndex(d)
 		}
 	}

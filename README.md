@@ -33,7 +33,7 @@ Prebuilt binaries for macOS and Linux are on the [releases page](https://github.
 
 **A loop that always ends.** The review produces one fixed list of findings. Fix rounds can only shorten it. Three rounds, then it ships or hands the rest to you.
 
-**A second opinion on every finding.** Set a `TYPESAFE_API_KEY` and [Jev](https://docs.typesafe.ai) reads each finding against the code it points at and says how likely it is to be real. Autopilot stops paying fix rounds for the unlikely ones; in manual mode the suggestion is pre-selected and you decide.
+**A second opinion on every finding.** Set a `TYPESAFE_API_KEY` and [Jev](https://docs.typesafe.ai) reads each finding that needs a decision against the code it points at and says how likely it is to be real. Autopilot stops paying fix rounds for the unlikely ones; in manual mode the suggestion is pre-selected and you decide.
 
 **The PR, opened.** Pushed, body written from the diff and the literal check output, 👀 reacted, CI watched, 👍 when it's green.
 

@@ -64,10 +64,12 @@ type Question struct {
 }
 
 // Answer is the union of the three answer shapes; the zero fields for the
-// other types are simply absent from the JSON.
+// other types are simply absent from the JSON. Noul is a pointer so that a
+// missing probability reads as missing, not as zero — zero is the one value
+// every threshold is below.
 type Answer struct {
 	Type          string             `json:"type"`
-	Noul          float64            `json:"noul"`
+	Noul          *float64           `json:"noul,omitempty"`
 	Choice        string             `json:"choice"`
 	Score         float64            `json:"score"`
 	Confidence    float64            `json:"confidence"`

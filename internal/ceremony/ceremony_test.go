@@ -2,6 +2,8 @@ package ceremony
 
 import (
 	"context"
+	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -12,6 +14,7 @@ import (
 	"github.com/richdapice/lgtm/internal/finding"
 	"github.com/richdapice/lgtm/internal/gitx"
 	"github.com/richdapice/lgtm/internal/project"
+	"github.com/richdapice/lgtm/internal/run"
 )
 
 func repo(t *testing.T) string {
@@ -136,5 +139,32 @@ func TestSkipByTriageOnlyWavesThroughUnlikelyAsks(t *testing.T) {
 	c.repo.Triage.SkipBelow = 0
 	if c.skipByTriage(cases[0].f) {
 		t.Error("skip_below = 0 must turn skipping off")
+	}
+}
+
+// Autopilot's skip is only worth anything if the finding lands where a
+// human sees it: Filed with the reason, which the PR body lists.
+func TestAutopilotFilesSkippedFindingsWithReason(t *testing.T) {
+	c := &Ceremony{
+		repo:   &config.Repo{Triage: config.Triage{SkipBelow: 0.2}},
+		common: t.TempDir(),
+		o:      Options{Out: io.Discard, Log: log.New(io.Discard, "", 0)},
+		run:    run.New("b", "main", "auto", 3, nil, nil),
+	}
+	c.run.Findings.Add(finding.Finding{ID: "skip", Path: "a.go", Line: 1, Anchor: "x", Rule: "r1", Severity: finding.Ask,
+		Triage: &finding.Triage{Real: 0.05, Suggest: "accept", Confidence: 0.9}})
+	c.run.Findings.Add(finding.Finding{ID: "keep", Path: "a.go", Line: 2, Anchor: "y", Rule: "r2", Severity: finding.Ask,
+		Triage: &finding.Triage{Real: 0.9, Suggest: "fix", Confidence: 0.9}})
+	c.run.Findings.Close()
+	if err := c.rounds(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	skip := c.run.Findings.ByID("skip")
+	if skip.State != finding.Filed || !strings.Contains(skip.Note, "not sent to the fixer") || !strings.Contains(skip.Note, "5% real") {
+		t.Fatalf("skipped finding = %s %q", skip.State, skip.Note)
+	}
+	keep := c.run.Findings.ByID("keep")
+	if keep.State != finding.Filed || strings.Contains(keep.Note, "not sent") {
+		t.Fatalf("kept finding (no fixer configured) = %s %q", keep.State, keep.Note)
 	}
 }

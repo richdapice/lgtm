@@ -94,8 +94,10 @@ type Finding struct {
 	// then does autopilot stop sending it.
 	AutoDeclined bool `json:"auto_declined,omitempty"`
 	// Triage is Jev's read of the finding, when a TYPESAFE_API_KEY is set.
-	// Advisory: it pre-selects the action in manual mode and lets autopilot
-	// skip the fixer for an `ask` that is probably not real. Never a verdict.
+	// Only anchored block/ask findings get one: those are the ones that need
+	// a decision and show code to judge. Advisory: it pre-selects the action
+	// in manual mode and lets autopilot skip the fixer for an `ask` that is
+	// probably not real. Never a verdict.
 	Triage *Triage `json:"triage,omitempty"`
 }
 
