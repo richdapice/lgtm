@@ -168,3 +168,45 @@ func TestIgnoreGlobs(t *testing.T) {
 		}
 	}
 }
+
+func TestTriageDefaultsAndBounds(t *testing.T) {
+	r, err := LoadRepo(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !r.Triage.On() || r.Triage.SkipBelow != DefaultSkipBelow {
+		t.Fatalf("triage defaults = %+v", r.Triage)
+	}
+	root := t.TempDir()
+	os.WriteFile(filepath.Join(root, RepoFile), []byte("[triage]\nenabled = false\nskip_below = 0\n"), 0o644)
+	r, err = LoadRepo(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Triage.On() || r.Triage.SkipBelow != 0 {
+		t.Fatalf("explicit zero must stick: %+v", r.Triage)
+	}
+	os.WriteFile(filepath.Join(root, RepoFile), []byte("[triage]\nskip_below = 1.5\n"), 0o644)
+	if _, err := LoadRepo(root); err == nil {
+		t.Fatal("skip_below above 1 must be rejected")
+	}
+}
+
+func TestGlobalTriageIsOffUntilWritten(t *testing.T) {
+	t.Setenv("LGTM_CONFIG", filepath.Join(t.TempDir(), "config.toml"))
+	g, err := LoadGlobal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g.Triage {
+		t.Fatal("triage must be off by default")
+	}
+	g.Triage = true
+	if err := WriteGlobal(g); err != nil {
+		t.Fatal(err)
+	}
+	g, err = LoadGlobal()
+	if err != nil || !g.Triage {
+		t.Fatalf("triage did not round-trip: %+v %v", g, err)
+	}
+}

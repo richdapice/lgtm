@@ -3,7 +3,9 @@ package tui
 import (
 	"testing"
 
+	"github.com/richdapice/lgtm/internal/ceremony"
 	"github.com/richdapice/lgtm/internal/diffparse"
+	"github.com/richdapice/lgtm/internal/finding"
 )
 
 const diff = `diff --git a/x.ts b/x.ts
@@ -33,5 +35,42 @@ func TestHunkAround(t *testing.T) {
 	}
 	if _, idx := hunkAround(files, "nope.ts", 3, 2); idx != -1 {
 		t.Fatal("unknown path should have no hunk")
+	}
+}
+
+func TestPreselectFollowsJev(t *testing.T) {
+	m := &model{canFix: true, marks: map[string]ceremony.Decision{}}
+	m.open = []finding.Finding{
+		{ID: "a", Triage: &finding.Triage{Suggest: "accept"}},
+		{ID: "b"},
+		{ID: "c", Triage: &finding.Triage{Suggest: "fix"}},
+		{ID: "d", Triage: &finding.Triage{Suggest: "dismiss"}},
+	}
+	m.cursor = 0
+	m.preselect()
+	if actions[m.action].d != ceremony.Accept {
+		t.Fatalf("finding a: action %d", m.action)
+	}
+	m.cursor = 1
+	m.preselect()
+	if actions[m.action].d != ceremony.Accept {
+		t.Fatalf("unscored finding should keep the user's selection, got %d", m.action)
+	}
+	m.marks["c"] = ceremony.Dismiss
+	m.cursor = 2
+	m.preselect()
+	if actions[m.action].d != ceremony.Dismiss {
+		t.Fatalf("a decision already made wins over jev, got %d", m.action)
+	}
+	m.cursor = 3
+	m.preselect()
+	if actions[m.action].d != ceremony.Accept {
+		t.Fatalf("dismiss is permanent and must never be pre-selected, got %d", m.action)
+	}
+	m.canFix = false
+	m.cursor = 1
+	m.preselect()
+	if actions[m.action].d != ceremony.Accept {
+		t.Fatalf("no fixer: Fix must not be preselected, got %d", m.action)
 	}
 }

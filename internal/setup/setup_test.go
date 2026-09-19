@@ -158,6 +158,9 @@ func TestPromptDetectedIsOneQuestion(t *testing.T) {
 	if back.PR.OnOpen != "eyes" || back.PR.OnGreen != "+1" {
 		t.Fatalf("init must not silence PR reactions: %+v", back.PR)
 	}
+	if back.Triage.SkipBelow != config.DefaultSkipBelow {
+		t.Fatalf("init must not write skip_below = 0, which means never skip: %+v", back.Triage)
+	}
 }
 
 func TestPromptEditWalksEveryField(t *testing.T) {

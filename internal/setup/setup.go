@@ -100,6 +100,8 @@ func Prompt(in *bufio.Reader, out io.Writer, d Detected, yes bool) (config.Repo,
 	r := config.Repo{
 		Settings: config.Settings{Mode: "auto", MaxFixRounds: 3, Dispatch: "batch"},
 		PR:       config.PR{OnOpen: "eyes", OnGreen: "+1"},
+		// the same reason: a written skip_below = 0 is "never skip", not the default
+		Triage: config.Triage{SkipBelow: config.DefaultSkipBelow},
 	}
 	for _, p := range d.Projects {
 		r.Projects = append(r.Projects, p.Project)

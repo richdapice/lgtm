@@ -155,10 +155,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.files = msg.files
 		}
 		m.marks = map[string]ceremony.Decision{}
-		m.cursor, m.action = 0, 0
-		if !m.canFix {
-			m.action = 1
-		}
+		m.cursor = 0
+		m.preselect()
 		return m, nil
 	case doneMsg:
 		m.done = true
@@ -195,10 +193,12 @@ func (m *model) key(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "up", "k":
 		if m.cursor > 0 {
 			m.cursor--
+			m.preselect()
 		}
 	case "down", "j":
 		if m.cursor < len(m.open)-1 {
 			m.cursor++
+			m.preselect()
 		}
 	case "left", "h", "shift+tab":
 		m.action = (m.action + len(actions) - 1) % len(actions)
@@ -227,6 +227,7 @@ func (m *model) key(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			j := (m.cursor + i) % len(m.open)
 			if _, ok := m.marks[m.open[j].ID]; !ok {
 				m.cursor = j
+				m.preselect()
 				break
 			}
 		}
@@ -243,6 +244,34 @@ func (m *model) key(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.submit(false, true)
 	}
 	return m, nil
+}
+
+// preselect puts the action cursor where the finding under the cursor
+// suggests: the decision already made for it, else Jev's suggestion, else
+// wherever the user left it. The user still presses Enter; nothing is
+// decided for them. Dismiss
+// is never pre-selected — it is the one action that is permanent and
+// committed, so it stays something you arrow over to; a dismiss suggestion
+// lands on Accept, and the line under the finding still says dismiss.
+func (m *model) preselect() {
+	if m.cursor >= len(m.open) {
+		m.action = 0
+		return
+	}
+	f := m.open[m.cursor]
+	if d, ok := m.marks[f.ID]; ok {
+		m.action = actionIndex(d)
+	} else if f.Triage != nil {
+		if d, ok := ceremony.ParseDecision(f.Triage.Suggest); ok {
+			if d == ceremony.Dismiss {
+				d = ceremony.Accept
+			}
+			m.action = actionIndex(d)
+		}
+	}
+	if !m.canFix && m.action == 0 {
+		m.action = 1
+	}
 }
 
 func (m *model) submit(autopilot, quit bool) {
@@ -496,6 +525,9 @@ func (m *model) review() string {
 	b.WriteString(indent(lipgloss.NewStyle().Width(w-4).Render(cur.Body), "   ") + "\n")
 	if cur.Note != "" {
 		b.WriteString(indent(sYellow.Render(lipgloss.NewStyle().Width(w-6).Render(cur.Note)), "   ↳ ") + "\n")
+	}
+	if cur.Triage != nil {
+		b.WriteString("   " + sSubtle.Render(cur.Triage.String()) + "\n")
 	}
 
 	b.WriteString("\n")
