@@ -23,7 +23,6 @@ import (
 	"github.com/richdapice/lgtm/internal/agent"
 	"github.com/richdapice/lgtm/internal/ceremony"
 	"github.com/richdapice/lgtm/internal/config"
-	"github.com/richdapice/lgtm/internal/diffparse"
 	"github.com/richdapice/lgtm/internal/finding"
 	"github.com/richdapice/lgtm/internal/gitx"
 	"github.com/richdapice/lgtm/internal/jev"
@@ -31,7 +30,6 @@ import (
 	"github.com/richdapice/lgtm/internal/run"
 	"github.com/richdapice/lgtm/internal/setup"
 	"github.com/richdapice/lgtm/internal/skill"
-	"github.com/richdapice/lgtm/internal/triage"
 	"github.com/richdapice/lgtm/internal/tui"
 	"golang.org/x/term"
 )
@@ -83,8 +81,6 @@ func main() {
 		err = cmdStatus(args)
 	case "findings":
 		err = cmdFindings(args)
-	case "rank":
-		err = cmdRank(ctx, args)
 	case "dismiss":
 		err = cmdDismiss(ctx, args)
 	case "doctor":
@@ -168,10 +164,6 @@ SETUP
     --statusline               add the live bar to Claude Code's status line
     --skill                    install the /lgtm skill for Claude Code
   lgtm doctor                  check each configured agent answers
-
-EXPERIMENT
-  lgtm rank [--json]           ask Jev which hunks of the diff deserve a close look;
-                               marks the ones the last review raised findings in
 
 SEE IT
   lgtm demo [--auto]           a scripted run in the real panel; no agent, no repo
@@ -375,148 +367,6 @@ func cmdFindings(args []string) error {
 	return nil
 }
 
-// cmdRank is the experiment: Jev scores every hunk before any reviewer
-// reads the diff. Read-only, no agent, a fraction of a cent. When the branch
-// has a run on file, each hunk says how many of that run's findings fell in
-// it, which is the number that says whether the ranking is worth anything.
-func cmdRank(ctx context.Context, args []string) error {
-	args = flagsFirst(args)
-	fs := flag.NewFlagSet("rank", flag.ExitOnError)
-	asJSON := fs.Bool("json", false, "machine-readable")
-	branch := fs.String("b", "", "branch (any worktree of this repo)")
-	baseRef := fs.String("base", "", "rank the diff from this ref instead of the merge base with the base branch")
-	headRef := fs.String("head", "HEAD", "rank the diff up to this ref")
-	runName := fs.String("run", "", "compare against this branch's run file (default: the branch being ranked)")
-	fs.Parse(args)
-	c := jev.FromEnv()
-	if c == nil {
-		return errors.New("rank needs TYPESAFE_API_KEY in the environment")
-	}
-	cwd, err := dirFor(ctx, *branch)
-	if err != nil {
-		return err
-	}
-	root, err := gitx.Root(ctx, cwd)
-	if err != nil {
-		return err
-	}
-	repo, err := config.LoadRepo(root)
-	if err != nil {
-		return err
-	}
-	base := repo.Settings.Base
-	if base == "" {
-		base = "main"
-	}
-	if gitx.RefExists(ctx, root, "origin/"+base) {
-		base = "origin/" + base
-	}
-	mergeBase := *baseRef
-	if mergeBase == "" {
-		if mergeBase, err = gitx.MergeBase(ctx, root, base, *headRef); err != nil {
-			return err
-		}
-	}
-	diff, err := gitx.Diff(ctx, root, mergeBase, *headRef, ":!.lgtm.toml", ":!.lgtm/")
-	if err != nil {
-		return err
-	}
-	files, err := diffparse.Parse(diff)
-	if err != nil {
-		return err
-	}
-	intent, _ := gitx.Run(ctx, root, "log", "--format=%s%n%b", mergeBase+".."+*headRef)
-
-	start := time.Now()
-	scores, res, err := triage.Rank(ctx, c, files, intent)
-	if err != nil {
-		return err
-	}
-	elapsed := time.Since(start)
-
-	// findings from the branch's last run, if any, to score the scorer
-	var findings []finding.Finding
-	if *runName != "" {
-		common, err := gitx.CommonDir(ctx, root)
-		if err != nil {
-			return err
-		}
-		r, err := run.Load(common, *runName)
-		if err != nil {
-			return fmt.Errorf("no run for %s", *runName)
-		}
-		findings = r.Findings.Findings
-	} else if r, _, err := loadCurrent(ctx, *branch); err == nil {
-		findings = r.Findings.Findings
-	}
-	hits := make([]int, len(scores))
-	landed, placed := 0, 0
-	for _, f := range findings {
-		if !f.Anchored() {
-			continue
-		}
-		placed++
-		for i, s := range scores {
-			if s.Contains(f.Path, f.Line) {
-				hits[i]++
-				landed++
-				break
-			}
-		}
-	}
-
-	if *asJSON {
-		type row struct {
-			triage.HunkScore
-			Findings int `json:"findings"`
-		}
-		rows := make([]row, len(scores))
-		for i, s := range scores {
-			rows[i] = row{s, hits[i]}
-		}
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(map[string]any{"hunks": rows, "asked": res.Asked, "scored": res.Scored, "cost_usd": res.CostUSD, "ms": elapsed.Milliseconds()})
-	}
-
-	fmt.Printf("%d hunk(s) · %d scored · %s · ≈$%.4f\n\n", res.Asked, res.Scored, elapsed.Round(time.Millisecond), res.CostUSD)
-	fmt.Printf("%-5s %-12s %-4s %-40s %s\n", "RISK", "LENS", "HITS", "HUNK", "FIRST CHANGE")
-	for i, s := range scores {
-		loc := fmt.Sprintf("%s:%d-%d", s.Path, s.NewStart, s.NewEnd)
-		if len(loc) > 40 {
-			loc = "…" + loc[len(loc)-39:]
-		}
-		hit := ""
-		if hits[i] > 0 {
-			hit = fmt.Sprintf("✓%d", hits[i])
-		}
-		mark := ""
-		if s.Truncated {
-			mark = " (truncated)"
-		}
-		fmt.Printf("%.2f  %-12s %-4s %-40s %s%s\n", s.Risk, s.Lens, hit, loc, clipText(s.Preview, 50), mark)
-	}
-	if placed > 0 {
-		// how far down the ranking a reviewer would have to read to reach
-		// every finding: the number that says whether this is useful
-		last := 0
-		for i := range scores {
-			if hits[i] > 0 {
-				last = i + 1
-			}
-		}
-		fmt.Printf("\n%d of %d anchored finding(s) from the last run sit in these hunks; all of them within the top %d of %d.\n", landed, placed, last, len(scores))
-	}
-	return nil
-}
-
-func clipText(s string, n int) string {
-	if len(s) > n {
-		return s[:n-1] + "…"
-	}
-	return s
-}
-
 func cmdDismiss(ctx context.Context, args []string) error {
 	args = flagsFirst(args)
 	fs := flag.NewFlagSet("dismiss", flag.ExitOnError)
@@ -684,13 +534,10 @@ func flagsFirst(args []string) []string {
 		a := args[i]
 		if strings.HasPrefix(a, "-") {
 			flags = append(flags, a)
-			// these take a value; boolean flags don't
-			switch strings.TrimLeft(a, "-") {
-			case "b", "r", "m", "base", "head", "run":
-				if i+1 < len(args) {
-					flags = append(flags, args[i+1])
-					i++
-				}
+			// -b takes a value; boolean flags don't
+			if (a == "-b" || a == "--b" || a == "-r" || a == "--r" || a == "-m" || a == "--m") && i+1 < len(args) {
+				flags = append(flags, args[i+1])
+				i++
 			}
 			continue
 		}
